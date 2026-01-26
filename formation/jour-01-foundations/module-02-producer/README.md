@@ -197,9 +197,22 @@ graph LR
 </project>
 ```
 
-#### Étape 2 : Code Producer Idempotent Ubuntu
+#### Étape 2 : Code Producer Idempotent Ubuntu - Étape par Étape
+
+##### 📋 **Étape 2.1 - Structure du projet**
+
+```bash
+# Créer la structure des dossiers
+mkdir -p src/main/java/com/bhf/kafka
+mkdir -p src/main/resources
+mkdir -p src/test/java/com/bhf/kafka
+mkdir -p logs
+```
+
+##### 📝 **Étape 2.2 - Code Producer Idempotent**
 
 Créer `src/main/java/com/bhf/kafka/IdempotentProducerApp.java` :
+
 ```java
 package com.bhf.kafka;
 
@@ -210,42 +223,158 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.UUID;
 
+/**
+ * 🏦 Producer Idempotent BHF - Application principale
+ * 
+ * Ce producteur garantit l'unicité des messages même en cas de retry
+ * pour éviter les doubles débits dans le contexte bancaire BHF.
+ */
 public class IdempotentProducerApp {
     private static final Logger log = LoggerFactory.getLogger(IdempotentProducerApp.class);
 
     public static void main(String[] args) {
-        // 🔥 Configuration producer idempotent
+        log.info("🏦 Démarrage du Producer Idempotent BHF");
+        
+        // 🔥 Étape 1 : Configuration du producer
+        Properties props = configureProducer();
+        
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            
+            // 🔥 Étape 2 : Création de la transaction BHF
+            Transaction transaction = createBHFTransaction();
+            
+            // 🔥 Étape 3 : Envoi de la transaction
+            sendTransaction(producer, transaction);
+            
+            // 🔥 Étape 4 : Vérification du résultat
+            log.info("✅ Transaction BHF envoyée avec succès");
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de l'envoi de la transaction", e);
+            System.exit(1);
+        }
+    }
+    
+    /**
+     * 🔥 Configuration du producer idempotent BHF
+     */
+    private static Properties configureProducer() {
         Properties props = new Properties();
+        
+        // Configuration de base
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        // Configuration idempotent BHF
+        
+        // 🔥 Configuration idempotent BHF - OBLIGATOIRE
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 5);
+        
+        // Tuning production BHF
         props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 30000);
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            String topic = "bhf-transactions";
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 20000);
+        props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 100);
+        
+        log.info("📋 Configuration producer idempotent terminée");
+        return props;
+    }
+    
+    /**
+     * 🏦 Création d'une transaction BHF de test
+     */
+    private static Transaction createBHFTransaction() {
+        String transactionId = "TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String accountId = "ACC-" + String.format("%06d", (int)(Math.random() * 999999));
+        double amount = 100 + Math.random() * 10000;
+        
+        return new Transaction(transactionId, accountId, amount, "EUR", "DEBIT", "PENDING");
+    }
+    
+    /**
+     * 🏦 Envoi de la transaction avec monitoring détaillé
+     */
+    private static void sendTransaction(KafkaProducer<String, String> producer, Transaction transaction) {
+        String topic = "bhf-transactions";
+        String key = transaction.getAccountId();
+        String value = transaction.toJson();
+        
+        log.info("📤 Envoi transaction BHF :");
+        log.info("   Transaction ID : {}", transaction.getTransactionId());
+        log.info("   Compte : {}", transaction.getAccountId());
+        log.info("   Montant : {} {}", transaction.getAmount(), transaction.getCurrency());
+        log.info("   Type : {}", transaction.getTransactionType());
+        log.info("   Statut : {}", transaction.getStatus());
+        
+        try {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
             
-            // Transaction BHF de test
-            String transactionId = "TXN-" + System.currentTimeMillis();
-            String key = "account-" + (int)(Math.random() * 1000);
-            String value = String.format(
-                "{\"transactionId\":\"%s\",\"amount\":%.2f,\"currency\":\"EUR\",\"type\":\"DEBIT\",\"status\":\"PENDING\"}",
-                transactionId, 100 + Math.random() * 1000
+            // 🔥 Envoi synchrone pour garantir la réception
+            RecordMetadata metadata = producer.send(record).get();
+            
+            log.info("✅ Transaction envoyée avec succès :");
+            log.info("   Topic : {}", metadata.topic());
+            log.info("   Partition : {}", metadata.partition());
+            log.info("   Offset : {}", metadata.offset());
+            log.info("   Timestamp : {}", metadata.timestamp());
+            
+            // Mise à jour du statut
+            transaction.setStatus("COMPLETED");
+            
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("❌ Erreur lors de l'envoi de la transaction {}", transaction.getTransactionId(), e);
+            transaction.setStatus("FAILED");
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    /**
+     * 🏦 Modèle Transaction BHF
+     */
+    private static class Transaction {
+        private String transactionId;
+        private String accountId;
+        private double amount;
+        private String currency;
+        private String transactionType;
+        private String status;
+        private long timestamp;
+        
+        public Transaction(String transactionId, String accountId, double amount, 
+                          String currency, String transactionType, String status) {
+            this.transactionId = transactionId;
+            this.accountId = accountId;
+            this.amount = amount;
+            this.currency = currency;
+            this.transactionType = transactionType;
+            this.status = status;
+            this.timestamp = System.currentTimeMillis();
+        }
+        
+        // Getters
+        public String getTransactionId() { return transactionId; }
+        public String getAccountId() { return accountId; }
+        public double getAmount() { return amount; }
+        public String getCurrency() { return currency; }
+        public String getTransactionType() { return transactionType; }
+        public String getStatus() { return status; }
+        public long getTimestamp() { return timestamp; }
+        
+        // Setters
+        public void setStatus(String status) { this.status = status; }
+        
+        public String toJson() {
+            return String.format(
+                "{\"transactionId\":\"%s\",\"accountId\":\"%s\",\"amount\":%.2f,\"currency\":\"%s\",\"type\":\"%s\",\"status\":\"%s\",\"timestamp\":%d}",
+                transactionId, accountId, amount, currency, transactionType, status, timestamp
             );
-
-            log.info("🏦 Envoi transaction BHF : {}", transactionId);
-
-            try {
-                ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
-                
-                // 🔥 Envoi synchrone pour garantir la réception
-                RecordMetadata metadata = producer.send(record).get();
+        }
+    }
+}
+```
                 
                 log.info("✅ Transaction envoyée avec succès :");
                 log.info("   Topic : {}", metadata.topic());
