@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: lab-05-streams-wordcount-eos-v2
+
+kafka:
+  bootstrap:
+    servers: kafka:29092
+
+lab:
+  input:
+    topic: lab05-text-input-topic
+  output:
+    topic: lab05-wordcount-output-topic
+  streams:
+    application:
+      id: lab05-wordcount-eos-v2
+    state:
+      dir: /tmp/kafka-streams/lab05
+
+logging:
+  level:
+    com.data2ai.kafkacourse: INFO
+    org.apache.kafka: WARN

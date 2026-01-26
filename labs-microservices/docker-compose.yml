@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - labs-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    networks:
+      - labs-network
+
+  # Lab 01: Idempotent Producer
+  lab-01-idempotent-producer:
+    build: ./lab-01-idempotent-producer
+    container_name: lab-01-idempotent-producer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - labs-network
+    profiles:
+      - lab01
+
+  # Lab 02: Transactional Producer
+  lab-02-transactional-producer:
+    build: ./lab-02-transactional-producer
+    container_name: lab-02-transactional-producer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - labs-network
+    profiles:
+      - lab02
+
+  # Lab 03: Read-Committed Consumer
+  lab-03-read-committed-consumer:
+    build: ./lab-03-read-committed-consumer
+    container_name: lab-03-read-committed-consumer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - labs-network
+    profiles:
+      - lab03
+
+  # Lab 04: End-to-End EOS
+  lab-04-eos-read-process-write:
+    build: ./lab-04-eos-read-process-write
+    container_name: lab-04-eos-read-process-write
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - labs-network
+    profiles:
+      - lab04
+
+  # Lab 05: Kafka Streams WordCount EOS v2
+  lab-05-streams-wordcount-eos-v2:
+    build: ./lab-05-streams-wordcount-eos-v2
+    container_name: lab-05-streams-wordcount-eos-v2
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - labs-network
+    profiles:
+      - lab05
+
+networks:
+  labs-network:
+    driver: bridge
