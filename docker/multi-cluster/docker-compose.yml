@@ -1,0 +1,99 @@
+version: "3.8"
+
+networks:
+  kafka-net:
+    driver: bridge
+
+services:
+  zookeeper-a:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper-a
+    networks:
+      - kafka-net
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka-a:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-a
+    networks:
+      - kafka-net
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    depends_on:
+      - zookeeper-a
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-a:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-a:9093,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  zookeeper-b:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper-b
+    networks:
+      - kafka-net
+    ports:
+      - "2281:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka-b:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka-b
+    networks:
+      - kafka-net
+    ports:
+      - "19092:19092"
+    depends_on:
+      - zookeeper-b
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-b:2181
+
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:19092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-b:9093,PLAINTEXT_HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  mm2:
+    image: confluentinc/cp-kafka-connect:7.6.0
+    container_name: mm2
+    networks:
+      - kafka-net
+    depends_on:
+      - kafka-a
+      - kafka-b
+    volumes:
+      - ./mm2/mm2.properties:/etc/kafka/mm2.properties:ro
+    command: ["bash", "-c", "connect-mirror-maker /etc/kafka/mm2.properties"]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    networks:
+      - kafka-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka-a
+      - kafka-b
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "true"
+      KAFKA_CLUSTERS_0_NAME: source
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-a:9093
+      KAFKA_CLUSTERS_1_NAME: target
+      KAFKA_CLUSTERS_1_BOOTSTRAPSERVERS: kafka-b:9093
