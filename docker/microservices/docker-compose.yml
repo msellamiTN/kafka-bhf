@@ -1,0 +1,131 @@
+version: "3.8"
+
+networks:
+  platform-net:
+    driver: bridge
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    networks:
+      - platform-net
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    networks:
+      - platform-net
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: kafka-ui
+    networks:
+      - platform-net
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: keycloak
+    networks:
+      - platform-net
+    ports:
+      - "18080:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command:
+      - start-dev
+      - --http-port=8080
+      - --import-realm
+    volumes:
+      - ../iam-keycloak/realm:/opt/keycloak/data/import:ro
+
+  order-service:
+    build:
+      context: ../../book-spring-microservices/code
+      dockerfile: order-service/Dockerfile
+    container_name: order-service
+    networks:
+      - platform-net
+    depends_on:
+      - kafka
+    ports:
+      - "8082:8082"
+
+  payment-service:
+    build:
+      context: ../../book-spring-microservices/code
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    networks:
+      - platform-net
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8083"
+
+  inventory-service:
+    build:
+      context: ../../book-spring-microservices/code
+      dockerfile: inventory-service/Dockerfile
+    container_name: inventory-service
+    networks:
+      - platform-net
+    depends_on:
+      - kafka
+    ports:
+      - "8084:8084"
+
+  api-gateway:
+    build:
+      context: ../../book-spring-microservices/code
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    networks:
+      - platform-net
+    depends_on:
+      - keycloak
+      - order-service
+      - payment-service
+      - inventory-service
+    ports:
+      - "8081:8081"

@@ -12,4 +12,4 @@ management:
         include: health,info
 
 kafka:
-  bootstrapServers: localhost:9092
+  bootstrapServers: kafka:9093

@@ -15,10 +15,12 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "redirectUris": [
-        "http://localhost:8081/*"
+        "http://localhost:8081/*",
+        "http://api-gateway:8081/*"
       ],
       "webOrigins": [
-        "http://localhost:8081"
+        "http://localhost:8081",
+        "http://api-gateway:8081"
       ]
     }
   ],
