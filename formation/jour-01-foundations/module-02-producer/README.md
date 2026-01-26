@@ -72,11 +72,11 @@ graph LR
     B --> C[Broker State]
     C --> D[Deduplication]
     
-    A1="PID:12345" --> B1="Seq:001"
+    A1["PID:12345"] --> B1["Seq:001"]
     B1 --> C1["(PID:12345, Seq:001)"]
     C1 --> D1["Accept"]
     
-    A2="PID:12345" --> B2="Seq:001"
+    A2["PID:12345"] --> B2["Seq:001"]
     B2 --> C2["(PID:12345, Seq:001)"]
     C2 --> D2["Duplicate → Reject"]
     
