@@ -390,50 +390,242 @@ public class IdempotentProducerApp {
 }
 ```
 
-#### Étape 3 : Test de l'idempotence
+#### Étape 3 : Test de l'idempotence - Étape par Étape
 
-```powershell
-# 1. Compiler le projet
+##### 📋 **Étape 3.1 : Préparation de l'environnement**
+```bash
+# Vérifier que Kafka est démarré
+if ! docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 &>/dev/null; then
+    echo "❌ Kafka n'est pas en cours d'exécution"
+    echo "Démarrez Kafka avec: docker-compose -f docker-compose.enterprise.yml up -d"
+    exit 1
+fi
+
+# Vérifier que le topic existe
+if ! docker exec kafka kafka-topics --describe --topic bhf-transactions --bootstrap-server localhost:9092 &>/dev/null; then
+    echo "📄 Création du topic bhf-transactions..."
+    docker exec kafka kafka-topics --create --topic bhf-transactions --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+fi
+
+# Nettoyer les logs précédents
+docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --timeout-ms 1000 > /dev/null || true
+```
+
+##### 📝 **Étape 3.2 : Compilation et Build**
+```bash
+# Étape 3.2.1 : Compilation Maven
+echo "📦 Étape 3.2.1 - Compilation Maven..."
 mvn clean compile
 
-# 2. Créer le topic BHF
-docker exec kafka kafka-topics --create --topic bhf-transactions --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+# Vérification de la compilation
+if [ $? -eq 0 ]; then
+    echo "✅ Compilation réussie"
+else
+    echo "❌ Échecec de la compilation"
+    exit 1
+fi
 
-# 3. Exécuter le producer 3 fois pour tester l'idempotence
-for ($i=1; $i -le 3; $i++) {
-    Write-Host "🔄 Exécution $i/3"
-    mvn exec:java -Dexec.mainClass="com.bhf.kafka.IdempotentProducerApp"
-    Start-Sleep 1
-}
+# Étape 3.2.2 : Build Docker
+echo "📦 Étape 3.2.2 - Build Docker..."
+./scripts/build-deploy.sh docker
 ```
+
+##### 📝 **Étape 3.3 : Déploiement**
+```bash
+# Étape 3.3.1 : Déploiement Docker Compose
+echo "📦 Étape 3.3.1 - Déploiement Docker Compose..."
+./scripts/build-deploy.sh deploy
+
+# Étape 3.3.2 : Vérification du déploiement
+echo "📦 Étape 3.3.2 - Vérification du déploiement..."
+./scripts/build-deploy.sh verify
+```
+
+##### 📝 **Étape 3.4 : Test d'idempotence**
+```bash
+# Étape 3.4.1 : Test d'idempotence - 3 envois
+echo "🔄 Étape 3.4.1 - Test d'idempotence (3 envois pour 1 seul message)"
+
+# Étape 3.4.2 : Exécution du test
+echo "📤 Envoi de la transaction 3 fois..."
+for i in {1..3}; do
+    echo "📤 Envoi $i/3"
+    mvn exec:java -Dexec.mainClass="com.bhf.kafka.IdempotentProducerApp" -q
+    sleep 1
+done
+
+# Étape 3.4.3 : Vérification des résultats
+echo "🔍 Étape 3.4.3 - Vérification de l'unicité..."
+message_count=$(docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --timeout-ms 5000 2>/dev/null | wc -l)
+
+if [ "$message_count" -eq 1 ]; then
+    echo "✅ Test d'idempotence réussi : 1 seul message malgré 3 envois"
+else
+    echo "❌ Test d'idempotence échoué : $message_count messages trouvés"
+    echo "🔍 Analyse des logs pour diagnostiquer..."
+    docker-compose logs bhf-producer --tail=20
+fi
+
+# Étape 3.4.4 : Affichage du message unique
+echo "📄 Message unique reçu :"
+docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --property print.key=true --timeout-ms 5000 2>/dev/null
+```
+
+##### 📝 **Étape 3.5 : Test de performance**
+```bash
+# Étape 3.5 : Test de performance - 100 envois rapides
+echo "⚡ Étape 3.5 - Test de performance (100 envois rapides)"
+
+# Démarrer le timer
+start_time=$(date +%s%N)
+
+# Envoi 100 messages en parallèle
+for i in {1..100}; do
+    mvn exec:java -Dexec.mainClass="com.bhf.kafka.IdempotentProducerApp" -q &
+done
+
+# Attendre fin de tous les processus
+wait
+
+# Calculer la durée
+end_time=$(date +%s%N)
+duration=$((($end_time - $start_time) / 1000000)) # Convertir en millisecondes
+
+echo "📊 Performance: 100 envois en ${duration}ms"
+echo "📈 Moyenne: $(($duration / 100))ms par envoi"
+echo "📈 Throughput: $(($duration / 1000)) tx/sec"
+```
+
+---
 
 #### Étape 4 : Vérification des résultats
 
-```powershell
-# Consommer pour vérifier l'unicité
-docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --property print.key=true
+```bash
+# Étape 4.1 : Vérification de l'unicité
+echo "🔍 Étape 4.1 - Vérification de l'unicité..."
+
+# Compter les messages
+message_count=$(docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --timeout-ms 5000 2>/dev/null | wc -l)
+
+# Validation
+if [ "$message_count" -eq 1 ]; then
+    echo "✅ Test d'idempotence réussi : 1 seul message malgré 3 envois"
+    echo "🔍 Garantie d'unicité validée"
+else
+    echo "❌ Test d'idempotence échoué : $message_count messages trouvés"
+    echo "🔍 Analyse des logs pour diagnostiquer..."
+    docker-compose logs bhf-producer --tail=20
+fi
+
+# Étape 4.2 : Affichage du message unique
+echo "📄 Message unique reçu :"
+docker exec kafka kafka-console-consumer --topic bhf-transactions --bootstrap-server localhost:9092 --from-beginning --property print.key=true --timeout-ms 5000 2>/dev/null
 ```
 
-**Résultat attendu (1 seul message malgré 3 envois) :**
-```
-account-456	{"transactionId":"TXN-1643723400123","amount":1250.75,"currency":"EUR","type":"DEBIT","status":"PENDING"}
+#### Étape 4.3 : Monitoring et métriques
+```bash
+# Étape 4.3 : Monitoring du producer
+echo "📊 Étape 4.3 - Monitoring du producer..."
+
+# Statut du conteneur
+docker ps | grep bhf-idempotent-producer
+
+# Logs récents
+docker-compose logs --tail=10 bhf-producer
+
+# Métriques Kafka
+docker exec kafka jcmd 1 VM.native_memory summary 2>/dev/null || echo "JMX non disponible"
+
+# Performance réseau
+netstat -an | grep :9092 | wc -l | xargs echo "Kafka connections:"
 ```
 
-#### Étape 5 : Test avec retries réseau (simulation)
+---
 
-```java
-// Ajouter une configuration pour simuler des timeouts
-props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000); // Timeout court
-props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 100); // Retry rapide
+## 🎯 **Checkpoint Module 02 - Enhanced**
+
+### ✅ **Validation des compétences techniques**
+
+- [ ] **Configuration Maven** : pom.xml optimisé pour Ubuntu Enterprise
+- [ ] **Dockerfile** : Multi-stage build optimisé avec sécurité
+- [ **Docker Compose** : Services orchestrés avec health checks
+- [ ] **Code Java** : Architecture claire et commentée étape par étape
+- [ ] **Tests automatisés** : Scripts de validation et performance
+- [ ] **Monitoring** : Logs centralisés et métriques temps réel
+
+### 📝 **Questions de checkpoint avancées**
+
+1. **Pourquoi `max.in.flight.requests.per.connection=5` est crucial ?**
+   - Garantit l'ordre des messages avec retries
+   - Préserve les garanties exactly-once
+   - Impact sur latence vs ordering
+
+2. **Comment Docker améliore-t-il le déploiement ?**
+   - Isolation complète de l'environnement
+   - Reproductibilité garantie
+   - Déploiement one-command
+   - Health checks automatiques
+
+3. **Quelle est la différence entre `delivery.timeout.ms` et `request.timeout.ms` ?**
+   - `delivery.timeout` : Temps total pour l'envoi complet
+   - `request.timeout` : Timeout pour une seule requête
+   - Impact sur la gestion des timeouts réseau
+
+---
+
+## 🚀 **Prochain Module 02 - Workflow Complet**
+
+```mermaid
+graph TD
+    A[Début] --> B[Configuration Maven]
+    B --> C[Build Docker]
+    C --> D[Déploiement]
+    D --> E[Tests]
+    E --> F[Validation]
+    F --> G[Monitoring]
+    
+    A --> B --> C --> D --> E --> F --> G
+    
+    style A fill:#e1f5fe
+    style G fill:#e8f5e8
 ```
 
-**Observation des logs :**
-```
-2024-01-01 10:00:00 INFO  IdempotentProducerApp - 🏦 Envoi transaction BHF : TXN-1643723400123
-2024-01-01 10:00:01 WARN  NetworkClient - Connection to node 1 could not be established. Broker may not be available.
-2024-01-01 10:00:02 INFO  IdempotentProducerApp - ✅ Transaction envoyée avec succès
-# Retry automatique mais 1 seul message dans Kafka
-```
+---
+
+## 🎓 **Ressources Additionnelles**
+
+### 📚 **Documentation technique**
+- **Kafka Idempotence Guide** : Documentation officielle
+- **Docker Best Practices** : Optimisation production
+- **Ubuntu Performance Tuning** : Paramètres système pour Kafka
+- **BHF Architecture Patterns** : Patterns spécifiques bancaires
+
+### 🛠️ **Scripts et Outils**
+- `build-deploy.sh` : Build et déploiement automatisé
+- `test-idempotence.sh` : Tests d'idempotence et performance
+- `monitor.sh` : Monitoring système et Kafka
+- `cleanup.sh` : Nettoyage complet
+
+### 🎯 **Support et Dépannage**
+- **Logs centralisés** : Tous les logs dans `~/kafka-formation-bhf/logs/`
+- **Health checks** : Monitoring automatique des services
+- **Métriques temps réel** : Performance et disponibilité
+- **Alertes automatiques** : Détection d'anomalies
+
+---
+
+## 🏦 **Conclusion Module 02**
+
+Le Module 02 est maintenant **100% Ubuntu Enterprise** avec :
+
+- ✅ **Étapes détaillées** pour chaque étape
+- ✅ **Diagrammes Mermaid** pour visualisation
+- ✅ **Code commenté** pour auto-formation
+- ✅ **Docker complet** avec build et déploiement
+- ✅ **Scripts automatisés** pour validation
+- ✅ **Monitoring intégré** et optimisé
+
+**Module 02 - Producer Idempotent - Ubuntu Enterprise Ready!** 🐧🐳🏦✅
 
 ---
 
