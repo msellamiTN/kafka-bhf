@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: lab-04-eos-read-process-write
+
+kafka:
+  bootstrap:
+    servers: kafka:29092
+
+lab:
+  input:
+    topic: lab02-transactional-topic
+  output:
+    topic: lab04-eos-output-topic
+  group:
+    id: lab04-eos-group
+  transactional:
+    id: lab04-eos-transactional
+
+logging:
+  level:
+    com.data2ai.kafkacourse: INFO
+    org.apache.kafka: WARN

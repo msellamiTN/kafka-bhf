@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: lab-03-read-committed-consumer
+
+kafka:
+  bootstrap:
+    servers: kafka:29092
+
+lab:
+  topic: lab02-transactional-topic
+  group:
+    id: lab03-read-committed-group
+
+logging:
+  level:
+    com.data2ai.kafkacourse: INFO
+    org.apache.kafka: WARN

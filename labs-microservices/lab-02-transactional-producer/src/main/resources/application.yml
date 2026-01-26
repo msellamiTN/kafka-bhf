@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: lab-02-transactional-producer
+
+kafka:
+  bootstrap:
+    servers: kafka:29092
+
+lab:
+  topic: lab02-transactional-topic
+  transactional:
+    id: lab02-transactional-producer
+  key: payment-456
+  value: '{"paymentId":"payment-456","amount":250.0,"currency":"USD"}'
+
+logging:
+  level:
+    com.data2ai.kafkacourse: INFO
+    org.apache.kafka: WARN
