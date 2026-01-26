@@ -1,0 +1,142 @@
+# Docker Compose - Module 02 Producer Idempotent
+# Configuration pour Ubuntu Enterprise - BHF Formation
+
+version: '3.8'
+
+services:
+  # Service Kafka pour le producer
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+      - "9999:9999"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_HEAP_OPTS: "-Xmx4G -Xms2G"
+      KAFKA_JMX_PORT: 9999
+      KAFKA_METRICS_REPORTER_INTERVAL_MS: 30000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      - kafka-logs:/var/log/kafka
+    networks:
+      - bhf-network
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Service Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 5
+      ZOOKEEPER_MAX_CLIENT_CNXNS: 60
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - bhf-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Service Producer Idempotent BHF
+  bhf-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bhf-idempotent-producer
+    ports:
+      - "8080:8080"
+    environment:
+      # Configuration Kafka pour le producer
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_NAME: bhf-transactions
+      
+      # Configuration idempotent BHF
+      KAFKA_ENABLE_IDEMPOTENCE: "true"
+      KAFKA_ACKS: "all"
+      KAFKA_RETRIES: "2147483647"
+      KAFKA_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION: "5"
+      KAFKA_DELIVERY_TIMEOUT_MS: "30000"
+      KAFKA_REQUEST_TIMEOUT_MS: "20000"
+      KAFKA_RETRY_BACKOFF_MS: "100"
+      
+      # Configuration application
+      SPRING_PROFILES_ACTIVE: "ubuntu,docker"
+      LOGGING_LEVEL_COM_BHF_KAFKA: "DEBUG"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bhf-network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Service Kafka UI pour monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    hostname: kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: BHF-Producer-Training
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPERCONNECT: zookeeper:2181
+      KAFKA_CLUSTERS_0_READONLY: "false"
+      KAFKA_CLUSTERS_0_KAFKACONFIGCLIENTID: kafka-ui
+      KAFKA_CLUSTERS_0_KAFKACONFIGCLIENTSECRET: kafka-ui-secret
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bhf-network
+    restart: unless-stopped
+
+volumes:
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  kafka-data:
+    driver: local
+  kafka-logs:
+    driver: local
+
+networks:
+  bhf-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
