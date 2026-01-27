@@ -4,6 +4,7 @@ services:
     container_name: toxiproxy
     ports:
       - "8474:8474"
+      - "29093:29093"
     networks:
       - bhf-kafka-network
 
@@ -12,12 +13,11 @@ services:
     container_name: toxiproxy-init
     depends_on:
       - toxiproxy
-    entrypoint: ["sh", "-lc"]
-    command: >
-      until curl -fsS http://toxiproxy:8474/version >/dev/null; do sleep 1; done;
-      curl -fsS -H 'Content-Type: application/json' -X POST http://toxiproxy:8474/proxies
-      -d '{"name":"kafka","listen":"0.0.0.0:29093","upstream":"kafka:29092"}' >/dev/null || true;
-      echo "toxiproxy proxy ready";
+    entrypoint: ["sh", "-c"]
+    command: |
+      until curl -fsS http://toxiproxy:8474/version >/dev/null 2>&1; do sleep 1; done
+      curl -fsS -H 'Content-Type: application/json' -X POST http://toxiproxy:8474/proxies -d '{"name":"kafka","listen":"0.0.0.0:29093","upstream":"kafka:29092"}' || true
+      echo "toxiproxy proxy ready"
     networks:
       - bhf-kafka-network
 
