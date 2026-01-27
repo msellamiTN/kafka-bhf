@@ -24,5 +24,6 @@ container_conflict() {
 container_conflict kafka-ui
 container_conflict kafka
 container_conflict zookeeper
+container_conflict portainer
 
 docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d

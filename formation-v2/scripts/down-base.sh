@@ -9,4 +9,4 @@ PROJECT_NAME="bhf-kafka-base"
 docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" down -v --remove-orphans >/dev/null 2>&1 || true
 
 # Defensive cleanup for fixed container names used by the training
-docker rm -f kafka kafka-ui zookeeper >/dev/null 2>&1 || true
+docker rm -f kafka kafka-ui zookeeper portainer >/dev/null 2>&1 || true
