@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  toxiproxy:
+    image: shopify/toxiproxy:2.5.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"
+    networks:
+      - bhf-kafka-network
+
+  toxiproxy-init:
+    image: curlimages/curl:8.5.0
+    container_name: toxiproxy-init
+    depends_on:
+      - toxiproxy
+      - kafka
+    entrypoint: ["sh", "-lc"]
+    command: >
+      until curl -fsS http://toxiproxy:8474/version >/dev/null; do sleep 1; done;
+      curl -fsS -H 'Content-Type: application/json' -X POST http://toxiproxy:8474/proxies
+      -d '{"name":"kafka","listen":"0.0.0.0:29093","upstream":"kafka:29092"}' >/dev/null || true;
+      echo "toxiproxy proxy ready";
+    networks:
+      - bhf-kafka-network
+
+  java-api:
+    build:
+      context: ./java
+    container_name: m02-java-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: toxiproxy:29093
+      SERVER_PORT: 8080
+      KAFKA_REQUEST_TIMEOUT_MS: ${KAFKA_REQUEST_TIMEOUT_MS:-1000}
+      KAFKA_DELIVERY_TIMEOUT_MS: ${KAFKA_DELIVERY_TIMEOUT_MS:-120000}
+      KAFKA_RETRY_BACKOFF_MS: ${KAFKA_RETRY_BACKOFF_MS:-100}
+      KAFKA_RETRIES: ${KAFKA_RETRIES:-10}
+      KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-0}
+      KAFKA_ACKS_PLAIN: ${KAFKA_ACKS_PLAIN:-1}
+    ports:
+      - "18080:8080"
+    depends_on:
+      - toxiproxy
+      - toxiproxy-init
+    networks:
+      - bhf-kafka-network
+
+  dotnet-api:
+    build:
+      context: ./dotnet
+    container_name: m02-dotnet-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: toxiproxy:29093
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      KAFKA_REQUEST_TIMEOUT_MS: ${KAFKA_REQUEST_TIMEOUT_MS:-1000}
+      KAFKA_DELIVERY_TIMEOUT_MS: ${KAFKA_DELIVERY_TIMEOUT_MS:-120000}
+      KAFKA_RETRY_BACKOFF_MS: ${KAFKA_RETRY_BACKOFF_MS:-100}
+      KAFKA_RETRIES: ${KAFKA_RETRIES:-10}
+      KAFKA_LINGER_MS: ${KAFKA_LINGER_MS:-0}
+    ports:
+      - "18081:8080"
+    depends_on:
+      - toxiproxy
+      - toxiproxy-init
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    name: bhf-kafka-network
+    driver: bridge
