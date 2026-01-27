@@ -1,22 +1,47 @@
-# Day 01 - Foundations (V2)
+# Day 01 - Fondamentaux (V2)
 
-Chaque module est **self-paced** et déployé via **Docker**.
+Chaque module est **auto-rythmé** et déployé via **Docker** avec KRaft (sans ZooKeeper).
 
 ## Prérequis
 
 - Docker + Docker Compose plugin (`docker compose`)
+- Scripts exécutables : `chmod +x ./scripts/*.sh`
 
 ## Démarrage
 
 ```bash
-./scripts/up-base.sh
-./scripts/bootstrap-topics.sh
+# Mode nœud unique (recommandé pour la formation)
+./scripts/up.sh single-node
+
+# Ou mode cluster (3 nœuds)
+./scripts/up.sh cluster
 ```
 
 - Kafka UI: <http://localhost:8080>
+- Portainer: <http://localhost:9443>
+
+## Arrêt
+
+```bash
+# Arrêter le mode utilisé
+./scripts/down.sh single-node
+# ou
+./scripts/down.sh cluster
+```
 
 ## Modules
 
-- [Module 01 - Cluster Architecture](./module-01-cluster/README.md)
-- [Module 02 - Producer Reliability](./module-02-producer-reliability/README.md)
-- [Module 03 - Consumer Read-Committed](./module-03-consumer-read-committed/README.md)
+- [Module 01 - Architecture du Cluster](./module-01-cluster/README.md)
+- [Module 02 - Fiabilité du Producteur](./module-02-producer-reliability/README.md)
+- [Module 03 - Consommateur Read-Committed](./module-03-consumer-read-committed/README.md)
+
+## Configuration KRaft
+
+Les modules utilisent la configuration KRaft avec l'image officielle `apache/kafka:latest` :
+
+- **Single node** : 1 broker (broker + contrôleur)
+- **Cluster** : 3 brokers (chaque broker + contrôleur)
+- **Pas de ZooKeeper** : Métadonnées gérées en interne par Kafka
+- **Ports** : Kafka 9092 (+9093,9094 pour cluster), UI 8080
+
+Consultez `../infra/README.md` pour plus de détails sur les options de déploiement.

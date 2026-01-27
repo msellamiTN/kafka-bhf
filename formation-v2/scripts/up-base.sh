@@ -5,25 +5,33 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/infra/docker-compose.base.yml"
 PROJECT_NAME="bhf-kafka-base"
 
+# Check for existing containers that would conflict
 container_conflict() {
-  local name="$1"
-  if docker ps -a --format '{{.Names}}' | grep -qx "$name"; then
-    local project
-    project="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$name" 2>/dev/null || true)"
-
-    echo "ERROR: container name '$name' already exists and blocks startup."
-    if [ -n "$project" ] && [ "$project" != "$PROJECT_NAME" ]; then
-      echo "It belongs to another compose project: '$project'"
+    local container=$1
+    if docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
+        echo "Error: Container '${container}' already exists."
+        echo "Run './scripts/down-base.sh' first to clean up, or remove it manually:"
+        echo "  docker rm -f ${container}"
+        exit 1
     fi
-    echo "Fix: sudo docker rm -f $name"
-    echo "Or:  sudo ./scripts/down-base.sh"
-    exit 1
-  fi
 }
 
-container_conflict kafka-ui
-container_conflict kafka
-container_conflict zookeeper
-container_conflict portainer
+# Check for conflicts before starting
+echo "Checking for existing containers..."
+container_conflict "kafka"
+container_conflict "kafka-ui"
+container_conflict "portainer"
 
+echo "Starting Kafka KRaft cluster..."
 docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" up -d
+
+echo "Waiting for services to be healthy..."
+timeout 300 bash -c "
+    until docker compose -p $PROJECT_NAME -f $COMPOSE_FILE ps --format json | jq -r '.State' | grep -q 'running' && \
+          docker compose -p $PROJECT_NAME -f $COMPOSE_FILE ps --format json | jq -r '.Health' | grep -q 'healthy'; do
+        echo 'Waiting for services...'; sleep 5; done
+"
+
+echo " Kafka KRaft cluster is ready!"
+echo "Kafka UI: http://localhost:8080"
+echo "Portainer: http://localhost:9443"
