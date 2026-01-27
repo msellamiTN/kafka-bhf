@@ -20,8 +20,8 @@ flowchart LR
   Dev --> K[(Kafka Broker)]
   Dev --> UI[Kafka UI]
 
-  P[Kafka CLI\n(kafka-console-producer)] --> K
-  C[Kafka CLI\n(kafka-console-consumer)] --> K
+  P["Kafka CLI<br/>(kafka-console-producer)"] --> K
+  C["Kafka CLI<br/>(kafka-console-consumer)"] --> K
 
   K --> UI
 
@@ -43,7 +43,7 @@ flowchart LR
 
 ### Step 0 - Se placer au bon endroit
 
-Positionnez-vous dans le dossier `formation/formation-v2/`.
+Positionnez-vous dans le dossier `formation-v2/`.
 
 ### Step 1 - Démarrer la base Kafka
 
