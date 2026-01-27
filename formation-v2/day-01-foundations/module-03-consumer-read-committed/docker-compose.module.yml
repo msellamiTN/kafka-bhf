@@ -33,5 +33,4 @@ services:
 
 networks:
   bhf-kafka-network:
-    name: bhf-kafka-network
-    driver: bridge
+    external: true
