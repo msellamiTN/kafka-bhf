@@ -2,12 +2,12 @@
 
 ## Objectif
 
-Démarrer le **cluster Kafka local** (Zookeeper + Broker + Kafka UI) et comprendre les composants fondamentaux: brokers, topics, partitions, offsets.
+Démarrer le **cluster Kafka local** avec KRaft (Kafka + Kafka UI) et comprendre les composants fondamentaux: brokers, topics, partitions, offsets.
 
 ## Ce que vous allez apprendre
 
 - Démarrer/arrêter la stack Kafka via Docker Compose
-- Vérifier l’état du cluster (health, list topics)
+- Vérifier l'état du cluster (health, list topics)
 - Créer un topic avec plusieurs partitions
 - Produire/consommer un message depuis le conteneur Kafka
 - Observer les messages via Kafka UI
@@ -16,8 +16,7 @@ Démarrer le **cluster Kafka local** (Zookeeper + Broker + Kafka UI) et comprend
 
 ```mermaid
 flowchart LR
-  Dev[Votre machine] -->|docker compose| ZK[(Zookeeper)]
-  Dev --> K[(Kafka Broker)]
+  Dev[Votre machine] -->|docker compose| K[(Kafka Broker KRaft)]
   Dev --> UI[Kafka UI]
 
   P["Kafka CLI<br/>(kafka-console-producer)"] --> K
@@ -26,7 +25,6 @@ flowchart LR
   K --> UI
 
   style K fill:#e8f5e8
-  style ZK fill:#e3f2fd
 ```
 
 ## Ports
@@ -48,35 +46,35 @@ Positionnez-vous dans le dossier `formation-v2/`.
 ### Step 1 - Démarrer la base Kafka
 
 ```bash
-./scripts/up-base.sh
+./scripts/up.sh
 ```
 
 ### Step 2 - Valider que la base est prête
 
 ```bash
-./scripts/validate-base.sh
+docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'kafka|kafka-ui'
 ```
 
 Résultat attendu:
 
-- `OK`
+- `kafka` et `kafka-ui` sont `Up (healthy)`
 
 ### Step 3 - Lister les services et vérifier les ports
 
 ```bash
-docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'kafka$|zookeeper$|kafka-ui$'
+docker ps --format '{{.Names}}\t{{.Status}}\t{{.Ports}}' | grep -E 'kafka$|kafka-ui$'
 ```
 
 ### Step 4 - Lister les topics
 
 ```bash
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
 ```
 
 ### Step 5 - Créer un topic de démonstration (3 partitions)
 
 ```bash
-docker exec kafka kafka-topics \
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --if-not-exists \
   --topic bhf-demo \
@@ -87,7 +85,7 @@ docker exec kafka kafka-topics \
 ### Step 6 - Décrire le topic et observer les partitions
 
 ```bash
-docker exec kafka kafka-topics \
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --describe --topic bhf-demo
 ```
@@ -101,7 +99,7 @@ Résultat attendu:
 ```bash
 MSG="hello-bhf-$(date +%s)"
 
-echo "$MSG" | docker exec -i kafka kafka-console-producer \
+echo "$MSG" | docker exec -i kafka /opt/kafka/bin/kafka-console-producer.sh \
   --bootstrap-server localhost:9092 \
   --topic bhf-demo
 ```
@@ -109,7 +107,7 @@ echo "$MSG" | docker exec -i kafka kafka-console-producer \
 ### Step 8 - Consommer le message
 
 ```bash
-docker exec kafka kafka-console-consumer \
+docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic bhf-demo \
   --from-beginning \
@@ -135,7 +133,7 @@ Résultat attendu:
 
 ## Checkpoint
 
-- Les conteneurs `zookeeper`, `kafka`, `kafka-ui` sont `Up`
+- Les conteneurs `kafka`, `kafka-ui` sont `Up`
 - Le topic `bhf-demo` existe avec **3 partitions**
 - Un message peut être produit et consommé
 
@@ -151,14 +149,14 @@ docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka-ui
 
 ### Kafka pas prêt
 
-- Attendez 20-60 secondes et relancez:
+- Attendez 30-60 secondes et relancez:
 
 ```bash
-./scripts/validate-base.sh
+docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 ## Nettoyage
 
 ```bash
-./scripts/down-base.sh
+./scripts/down.sh
 ```

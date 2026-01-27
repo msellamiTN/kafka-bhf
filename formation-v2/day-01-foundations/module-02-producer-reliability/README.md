@@ -106,14 +106,13 @@ flowchart LR
 - Base stack démarrée:
 
 ```bash
-./scripts/up-base.sh
-./scripts/bootstrap-topics.sh
+./scripts/up.sh
 ```
 
-Si vous partez de zéro, exécutez aussi:
+Vérifiez que Kafka est prêt:
 
 ```bash
-./scripts/validate-base.sh
+docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 ## Step-by-step
@@ -133,7 +132,7 @@ Positionnez-vous dans le dossier `formation/formation-v2/`.
 Depuis le dossier `formation-v2/`:
 
 ```bash
-docker compose -f infra/docker-compose.base.yml \
+docker compose -f infra/docker-compose.single-node.yml \
   -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
   up -d --build
 ```
@@ -143,12 +142,12 @@ Attendez ~1-2 minutes (le temps de build des images Java/.NET).
 ### Step 2 - Vérifier l’état des conteneurs
 
 ```bash
-docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'kafka$|zookeeper$|kafka-ui$|toxiproxy$|m02-java-api$|m02-dotnet-api$|toxiproxy-init$'
+docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'kafka$|kafka-ui$|toxiproxy$|m02-java-api$|m02-dotnet-api$|toxiproxy-init$'
 ```
 
 Résultat attendu:
 
-- `kafka`, `zookeeper`, `kafka-ui` sont `Up`
+- `kafka`, `kafka-ui` sont `Up (healthy)`
 - `toxiproxy` est `Up`
 - `toxiproxy-init` peut être `Exited (0)` (c’est normal: one-shot)
 - `m02-java-api` et `m02-dotnet-api` sont `Up`
@@ -316,7 +315,7 @@ curl -fsS -X POST "localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=
 Consommer et afficher partition/offset:
 
 ```bash
-docker exec kafka kafka-console-consumer \
+docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic bhf-transactions \
   --from-beginning \
@@ -340,7 +339,7 @@ Comprendre le principe “dernière valeur par key” et pourquoi la compaction 
 Créer un topic compacté (démo):
 
 ```bash
-docker exec kafka kafka-topics \
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --if-not-exists \
   --topic bhf-compact-demo \
@@ -387,13 +386,13 @@ docker logs -n 200 m02-dotnet-api
 - Vérifiez le base stack:
 
 ```bash
-./scripts/validate-base.sh
+docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 ## Nettoyage
 
 ```bash
-docker compose -f infra/docker-compose.base.yml \
+docker compose -f infra/docker-compose.single-node.yml \
   -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
   down
 ```

@@ -6,8 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+KAFKA_BIN="/opt/kafka/bin"
+
 compose_up() {
-  docker compose -f "$ROOT_DIR/infra/docker-compose.base.yml" -f "$MODULE_DIR/docker-compose.module.yml" up -d --build
+  docker compose -f "$ROOT_DIR/infra/docker-compose.single-node.yml" -f "$MODULE_DIR/docker-compose.module.yml" up -d --build
 }
 
 wait_http() {
@@ -23,7 +25,7 @@ wait_http() {
 
 wait_kafka() {
   for i in {1..120}; do
-    if docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
+    if docker exec kafka $KAFKA_BIN/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -34,7 +36,7 @@ wait_kafka() {
 
 ensure_topic() {
   local topic="$1"
-  docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1 >/dev/null
+  docker exec kafka $KAFKA_BIN/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1 >/dev/null
 }
 
 toxi_api() {
@@ -69,7 +71,7 @@ send_with_latency_then_recover() {
 count_event() {
   local topic="$1"
   local event_id="$2"
-  docker exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic "$topic" --from-beginning --timeout-ms 10000 2>/dev/null \
+  docker exec kafka $KAFKA_BIN/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic "$topic" --from-beginning --timeout-ms 10000 2>/dev/null \
     | { grep -F "$event_id" || true; } \
     | wc -l \
     | tr -d ' '

@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+KAFKA_BIN="/opt/kafka/bin"
+
 TOPIC="bhf-read-committed-demo-$(date +%s)"
 GROUP_ID="m03-validate-$(date +%s)"
 
@@ -14,7 +16,7 @@ export KAFKA_GROUP_ID_JAVA="${GROUP_ID}-java"
 export KAFKA_GROUP_ID_DOTNET="${GROUP_ID}-dotnet"
 
 compose_up() {
-  docker compose -f "$ROOT_DIR/infra/docker-compose.base.yml" -f "$MODULE_DIR/docker-compose.module.yml" up -d --build
+  docker compose -f "$ROOT_DIR/infra/docker-compose.single-node.yml" -f "$MODULE_DIR/docker-compose.module.yml" up -d --build
 }
 
 wait_http() {
@@ -30,7 +32,7 @@ wait_http() {
 
 wait_kafka() {
   for i in {1..120}; do
-    if docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
+    if docker exec kafka $KAFKA_BIN/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -41,7 +43,7 @@ wait_kafka() {
 
 ensure_topic() {
   local topic="$1"
-  docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1 >/dev/null
+  docker exec kafka $KAFKA_BIN/kafka-topics.sh --bootstrap-server localhost:9092 --create --if-not-exists --topic "$topic" --partitions 3 --replication-factor 1 >/dev/null
 }
 
 wait_metrics_contains_only_committed() {

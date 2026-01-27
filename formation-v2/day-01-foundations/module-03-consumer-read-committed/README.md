@@ -45,14 +45,19 @@ Positionnez-vous dans le dossier `formation-v2/`.
 ### Step 1 - Démarrer la base Kafka
 
 ```bash
-./scripts/up-base.sh
-./scripts/validate-base.sh
+./scripts/up.sh
+```
+
+Vérifiez que Kafka est prêt:
+
+```bash
+docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 ### Step 2 - Démarrer le module 03
 
 ```bash
-docker compose -f infra/docker-compose.base.yml \
+docker compose -f infra/docker-compose.single-node.yml \
   -f day-01-foundations/module-03-consumer-read-committed/docker-compose.module.yml \
   up -d --build
 ```
@@ -115,7 +120,7 @@ Résultat attendu:
 ## Nettoyage
 
 ```bash
-docker compose -f infra/docker-compose.base.yml \
+docker compose -f infra/docker-compose.single-node.yml \
   -f day-01-foundations/module-03-consumer-read-committed/docker-compose.module.yml \
   down
 ```
