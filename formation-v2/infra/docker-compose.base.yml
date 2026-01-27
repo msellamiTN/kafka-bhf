@@ -11,10 +11,11 @@ services:
     networks:
       - bhf-kafka-network
     healthcheck:
-      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/localhost/2181; printf 'ruok\n' >&3; head -c 4 <&3 | grep -q imok"]
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/localhost/2181; printf 'ruok\n' >&3; IFS= read -r -n 4 -t 2 resp <&3; [ \"$resp\" = imok ]"]
+      start_period: 20s
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 20
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
