@@ -12,7 +12,6 @@ services:
     container_name: toxiproxy-init
     depends_on:
       - toxiproxy
-      - kafka
     entrypoint: ["sh", "-lc"]
     command: >
       until curl -fsS http://toxiproxy:8474/version >/dev/null; do sleep 1; done;
