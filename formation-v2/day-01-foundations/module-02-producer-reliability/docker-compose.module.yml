@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   toxiproxy:
     image: shopify/toxiproxy:2.5.0

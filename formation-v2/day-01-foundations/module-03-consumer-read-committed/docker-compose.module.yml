@@ -1,0 +1,37 @@
+services:
+  java-api:
+    build:
+      context: ./java
+    container_name: m03-java-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-bhf-read-committed-demo}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID_JAVA:-m03-java-consumer}
+      SERVER_PORT: 8080
+    ports:
+      - "18090:8080"
+    depends_on:
+      - kafka
+    networks:
+      - bhf-kafka-network
+
+  dotnet-api:
+    build:
+      context: ./dotnet
+    container_name: m03-dotnet-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-bhf-read-committed-demo}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID_DOTNET:-m03-dotnet-consumer}
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+    ports:
+      - "18091:8080"
+    depends_on:
+      - kafka
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    name: bhf-kafka-network
+    driver: bridge

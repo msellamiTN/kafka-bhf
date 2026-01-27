@@ -19,3 +19,4 @@ Chaque module est **self-paced** et déployé via **Docker**.
 
 - [Module 01 - Cluster Architecture](./module-01-cluster/README.md)
 - [Module 02 - Producer Reliability](./module-02-producer-reliability/README.md)
+- [Module 03 - Consumer Read-Committed](./module-03-consumer-read-committed/README.md)
