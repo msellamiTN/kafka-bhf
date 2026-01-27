@@ -1,6 +1,6 @@
 services:
   toxiproxy:
-    image: shopify/toxiproxy:2.5.0
+    image: ghcr.io/shopify/toxiproxy:2.9.0
     container_name: toxiproxy
     ports:
       - "8474:8474"
