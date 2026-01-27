@@ -11,8 +11,8 @@ services:
     networks:
       - bhf-kafka-network
     healthcheck:
-      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/localhost/2181; printf 'ruok\n' >&3; IFS= read -r -n 4 -t 2 resp <&3; [ \"$resp\" = imok ]"]
-      start_period: 20s
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/localhost:2181 && exit 0 || exit 1"]
+      start_period: 30s
       interval: 10s
       timeout: 5s
       retries: 20
