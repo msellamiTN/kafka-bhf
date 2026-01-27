@@ -1,4 +1,29 @@
 services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"
+      - "29093:29093"
+    networks:
+      - bhf-kafka-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8474/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  toxiproxy-init:
+    image: curlimages/curl:8.5.0
+    container_name: toxiproxy-init
+    depends_on:
+      toxiproxy:
+        condition: service_healthy
+    command: >
+      sh -c "curl -fsS -X POST http://toxiproxy:8474/proxies -H 'Content-Type: application/json' -d '{\"name\":\"kafka\",\"listen\":\"0.0.0.0:29093\",\"upstream\":\"kafka:29092\"}' && echo ' Proxy created successfully'"
+    networks:
+      - bhf-kafka-network
+
   java-api:
     build:
       context: ./java
