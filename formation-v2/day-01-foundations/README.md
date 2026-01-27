@@ -11,10 +11,13 @@ Chaque module est **auto-rythmé** et déployé via **Docker** avec KRaft (sans 
 
 ```bash
 # Mode nœud unique (recommandé pour la formation)
-./scripts/up.sh single-node
+./scripts/start.sh
 
-# Ou mode cluster (3 nœuds)
-./scripts/up.sh cluster
+# Ou explicitement
+./scripts/start.sh single-node
+
+# Mode cluster (3 nœuds)
+./scripts/start.sh cluster
 ```
 
 - Kafka UI: <http://localhost:8080>
@@ -24,9 +27,11 @@ Chaque module est **auto-rythmé** et déployé via **Docker** avec KRaft (sans 
 
 ```bash
 # Arrêter le mode utilisé
-./scripts/down.sh single-node
-# ou
-./scripts/down.sh cluster
+./scripts/stop.sh
+
+# Ou explicitement
+./scripts/stop.sh single-node
+./scripts/stop.sh cluster
 ```
 
 ## Modules
