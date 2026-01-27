@@ -15,50 +15,316 @@
 5. ✅ Produire et consommer des messages via la ligne de commande
 6. ✅ Naviguer dans Kafka UI pour visualiser les messages
 
-## Concepts clés
+---
 
-### Qu'est-ce que Kafka ?
+## 📖 Partie Théorique
 
-**Apache Kafka** est une plateforme de streaming distribuée qui permet de :
+### 1. Qu'est-ce que Apache Kafka ?
 
-- **Publier et souscrire** à des flux de données (messages)
-- **Stocker** les messages de manière durable et résiliente
-- **Traiter** les flux de données en temps réel
+**Apache Kafka** est une plateforme de streaming distribuée open-source, initialement développée par LinkedIn et maintenant maintenue par la Apache Software Foundation.
 
-### Architecture KRaft
+#### Cas d'usage principaux
 
-Depuis Kafka 3.3+, le mode **KRaft** (Kafka Raft) remplace ZooKeeper pour la gestion des métadonnées :
+```mermaid
+mindmap
+  root((Apache Kafka))
+    Messaging
+      File d'attente de messages
+      Pub/Sub
+      Découplage des systèmes
+    Streaming
+      Traitement temps réel
+      ETL en continu
+      Agrégation de données
+    Stockage
+      Log distribué
+      Event Sourcing
+      Audit trail
+    Intégration
+      Microservices
+      CDC (Change Data Capture)
+      Data Pipeline
+```
 
-| Composant | Rôle |
-|-----------|------|
-| **Broker** | Stocke les messages, gère les partitions |
-| **Controller** | Gère les métadonnées du cluster (leader election, etc.) |
-| **Topic** | Catégorie/flux de messages |
-| **Partition** | Sous-division d'un topic pour le parallélisme |
-| **Offset** | Position d'un message dans une partition |
+#### Caractéristiques clés
 
-### Diagramme d'architecture
+| Caractéristique | Description |
+|-----------------|-------------|
+| **Haute performance** | Millions de messages/seconde avec latence < 10ms |
+| **Scalabilité horizontale** | Ajout de brokers sans interruption |
+| **Durabilité** | Messages persistés sur disque, répliqués |
+| **Tolérance aux pannes** | Réplication automatique, failover |
+| **Ordre garanti** | Au sein d'une partition |
+
+---
+
+### 2. Architecture de Kafka
+
+#### Vue d'ensemble
 
 ```mermaid
 flowchart TB
-    subgraph Docker["Docker Environment"]
-        K["🔧 Kafka Broker<br/>(KRaft Mode)<br/>Port: 9092"]
-        UI["📊 Kafka UI<br/>Port: 8080"]
+    subgraph Producers["📤 Producers"]
+        P1["Application A"]
+        P2["Application B"]
+        P3["Service C"]
     end
     
-    subgraph Client["Votre Machine"]
-        P["📤 Producer<br/>(kafka-console-producer)"]
-        C["📥 Consumer<br/>(kafka-console-consumer)"]
+    subgraph Cluster["🔷 Kafka Cluster"]
+        subgraph B1["Broker 1"]
+            T1P0["Topic1-P0<br/>Leader"]
+            T1P1["Topic1-P1<br/>Follower"]
+        end
+        subgraph B2["Broker 2"]
+            T1P0F["Topic1-P0<br/>Follower"]
+            T1P1L["Topic1-P1<br/>Leader"]
+        end
+        subgraph B3["Broker 3"]
+            T1P2["Topic1-P2<br/>Leader"]
+        end
+    end
+    
+    subgraph Consumers["📥 Consumers"]
+        CG1["Consumer Group A"]
+        CG2["Consumer Group B"]
+    end
+    
+    P1 --> B1
+    P2 --> B2
+    P3 --> B3
+    
+    B1 --> CG1
+    B2 --> CG1
+    B3 --> CG2
+    
+    style Cluster fill:#e8f5e8
+```
+
+#### Composants fondamentaux
+
+| Composant | Icône | Description |
+|-----------|-------|-------------|
+| **Broker** | 🖥️ | Serveur Kafka qui stocke les messages et sert les clients |
+| **Topic** | 📁 | Catégorie logique pour organiser les messages |
+| **Partition** | 📊 | Subdivision d'un topic pour la parallélisation |
+| **Producer** | 📤 | Application qui envoie des messages |
+| **Consumer** | 📥 | Application qui lit des messages |
+| **Consumer Group** | 👥 | Ensemble de consumers qui se partagent la lecture |
+
+---
+
+### 3. Topics et Partitions
+
+#### Concept de Topic
+
+Un **Topic** est un flux de messages nommé. C'est la catégorie dans laquelle les messages sont publiés.
+
+```mermaid
+flowchart LR
+    subgraph Topic["📁 Topic: orders"]
+        P0["Partition 0<br/>━━━━━━━━━━━━"]
+        P1["Partition 1<br/>━━━━━━━━━━━━"]
+        P2["Partition 2<br/>━━━━━━━━━━━━"]
+    end
+    
+    Producer["📤 Producer"] --> Topic
+    Topic --> Consumer["📥 Consumer"]
+```
+
+#### Anatomie d'une Partition
+
+Une **Partition** est un log ordonné et immuable de messages :
+
+```
+Partition 0:
+┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+│  0  │  1  │  2  │  3  │  4  │  5  │  6  │  7  │  ← Offsets
+├─────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┤
+│ Msg │ Msg │ Msg │ Msg │ Msg │ Msg │ Msg │ Msg │  ← Messages
+└─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+                                              ↑
+                                         Nouveaux messages
+                                         (append-only)
+```
+
+#### Pourquoi plusieurs partitions ?
+
+```mermaid
+flowchart TB
+    subgraph Single["❌ 1 Partition = Goulot d'étranglement"]
+        S1["Consumer 1"] --> SP["Partition 0"]
+        S2["Consumer 2"] -.->|"attend"| SP
+        S3["Consumer 3"] -.->|"attend"| SP
+    end
+    
+    subgraph Multi["✅ 3 Partitions = Parallélisme"]
+        M1["Consumer 1"] --> MP0["Partition 0"]
+        M2["Consumer 2"] --> MP1["Partition 1"]
+        M3["Consumer 3"] --> MP2["Partition 2"]
+    end
+```
+
+| Nombre de partitions | Avantages | Inconvénients |
+|----------------------|-----------|---------------|
+| **1** | Ordre global garanti | Pas de parallélisme |
+| **3-10** | Bon équilibre | Standard pour la plupart des cas |
+| **100+** | Très haut débit | Plus de ressources, latence accrue |
+
+---
+
+### 4. Offsets et Consommation
+
+#### Qu'est-ce qu'un Offset ?
+
+L'**Offset** est la position unique d'un message dans une partition. C'est un entier croissant.
+
+```mermaid
+flowchart LR
+    subgraph Partition["Partition 0"]
+        O0["Offset 0<br/>Message A"]
+        O1["Offset 1<br/>Message B"]
+        O2["Offset 2<br/>Message C"]
+        O3["Offset 3<br/>Message D"]
+        O4["Offset 4<br/>Message E"]
+    end
+    
+    O0 --> O1 --> O2 --> O3 --> O4
+    
+    Consumer["📥 Consumer<br/>Position: Offset 3"]
+    Consumer -.->|"Lit"| O3
+```
+
+#### Gestion des Offsets
+
+| Mode | Description | Cas d'usage |
+|------|-------------|-------------|
+| **Earliest** | Lire depuis le début | Retraitement complet |
+| **Latest** | Lire les nouveaux messages uniquement | Temps réel |
+| **Specific** | Lire depuis un offset précis | Reprise après erreur |
+
+---
+
+### 5. Mode KRaft vs ZooKeeper
+
+#### Évolution de l'architecture
+
+```mermaid
+timeline
+    title Évolution de Kafka
+    2011 : Kafka créé par LinkedIn avec ZooKeeper
+    2017 : KIP-500 proposé (suppression ZooKeeper)
+    2022 : KRaft en production (Kafka 3.3)
+    2024 : ZooKeeper déprécié (Kafka 4.0)
+```
+
+#### Comparaison
+
+```mermaid
+flowchart TB
+    subgraph Old["❌ Ancienne Architecture (ZooKeeper)"]
+        ZK["🔷 ZooKeeper<br/>Coordination"]
+        KB1["Kafka Broker 1"]
+        KB2["Kafka Broker 2"]
+        KB3["Kafka Broker 3"]
+        
+        ZK <--> KB1
+        ZK <--> KB2
+        ZK <--> KB3
+    end
+    
+    subgraph New["✅ Nouvelle Architecture (KRaft)"]
+        KC1["Kafka 1<br/>Broker + Controller"]
+        KC2["Kafka 2<br/>Broker + Controller"]
+        KC3["Kafka 3<br/>Broker + Controller"]
+        
+        KC1 <-->|"Raft"| KC2
+        KC2 <-->|"Raft"| KC3
+        KC3 <-->|"Raft"| KC1
+    end
+```
+
+| Aspect | ZooKeeper | KRaft |
+|--------|-----------|-------|
+| **Composants** | Kafka + ZooKeeper | Kafka seul |
+| **Complexité** | Élevée | Réduite |
+| **Performances** | Bonnes | Meilleures |
+| **Scalabilité** | Limitée par ZK | Améliorée |
+| **Démarrage** | Lent | Rapide |
+
+---
+
+### 6. Producer et Consumer
+
+#### Le Producer
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant P as Producer
+    participant K as Kafka Broker
+    
+    App->>P: send(topic, message)
+    P->>P: Sérialisation
+    P->>P: Partitionnement
+    P->>K: Envoi au leader
+    K->>K: Écriture sur disque
+    K->>K: Réplication
+    K-->>P: ACK (acknowledgment)
+    P-->>App: Confirmation
+```
+
+#### Le Consumer
+
+```mermaid
+sequenceDiagram
+    participant C as Consumer
+    participant K as Kafka Broker
+    participant App as Application
+    
+    C->>K: subscribe(topic)
+    loop Polling
+        C->>K: poll()
+        K-->>C: Messages (batch)
+        C->>App: Traitement
+        C->>K: commit(offset)
+    end
+```
+
+---
+
+### 7. Diagramme d'architecture du Lab
+
+```mermaid
+flowchart TB
+    subgraph Docker["🐳 Docker Environment"]
+        subgraph KafkaContainer["Container: kafka"]
+            KB["Apache Kafka<br/>Mode: KRaft<br/>Image: apache/kafka:latest"]
+            KData[("📁 Volume<br/>kafka-data")]
+        end
+        
+        subgraph UIContainer["Container: kafka-ui"]
+            UI["Kafka UI<br/>Image: provectuslabs/kafka-ui"]
+        end
+        
+        Network["🌐 Network: bhf-kafka-network"]
+    end
+    
+    subgraph Host["💻 Votre Machine"]
+        Terminal["🖥️ Terminal<br/>kafka-console-*"]
         Browser["🌐 Navigateur"]
     end
     
-    P -->|"Envoie messages"| K
-    K -->|"Distribue messages"| C
-    Browser -->|"Visualise"| UI
-    UI -->|"Lit métadonnées"| K
+    Terminal -->|"Port 9092"| KB
+    Browser -->|"Port 8080"| UI
+    UI -->|"Port 29092<br/>(interne)"| KB
+    KB --> KData
     
-    style K fill:#e8f5e8
-    style UI fill:#e3f2fd
+    KB --- Network
+    UI --- Network
+    
+    style Docker fill:#e3f2fd
+    style KafkaContainer fill:#e8f5e8
+    style UIContainer fill:#fff3e0
 ```
 
 ## Ports et URLs

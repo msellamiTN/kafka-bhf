@@ -18,60 +18,405 @@
 
 ---
 
-## 📖 Concepts théoriques
+## 📖 Partie Théorique Approfondie
 
-### Qu'est-ce que l'idempotence ?
+### 1. Le Producteur Kafka en détail
 
-L'**idempotence** garantit qu'un message envoyé plusieurs fois (à cause de retries) n'est écrit qu'**une seule fois** dans Kafka.
+#### Cycle de vie d'un message
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Prod as Producer
+    participant Ser as Serializer
+    participant Part as Partitioner
+    participant Batch as RecordAccumulator
+    participant Net as NetworkClient
+    participant Broker as Kafka Broker
+    
+    App->>Prod: send(record)
+    Prod->>Ser: serialize(key, value)
+    Ser-->>Prod: byte[]
+    Prod->>Part: partition(topic, key)
+    Part-->>Prod: partition number
+    Prod->>Batch: append to batch
+    Note over Batch: Attend linger.ms ou batch.size
+    Batch->>Net: send batch
+    Net->>Broker: ProduceRequest
+    Broker->>Broker: Write to log
+    Broker->>Broker: Replicate
+    Broker-->>Net: ProduceResponse (offset)
+    Net-->>Prod: RecordMetadata
+    Prod-->>App: Future/Callback
+```
+
+#### Composants internes du Producer
+
+```mermaid
+flowchart TB
+    subgraph Producer["📤 Kafka Producer"]
+        subgraph Config["Configuration"]
+            BS["batch.size<br/>16KB"]
+            LI["linger.ms<br/>0ms"]
+            AC["acks<br/>all"]
+            RE["retries<br/>∞"]
+        end
+        
+        subgraph Pipeline["Pipeline d'envoi"]
+            SER["🔄 Serializer<br/>Key + Value"]
+            PAR["📊 Partitioner<br/>Round-robin / Hash"]
+            ACC["📦 RecordAccumulator<br/>Batching"]
+            SND["🌐 Sender Thread<br/>Network I/O"]
+        end
+        
+        SER --> PAR --> ACC --> SND
+    end
+    
+    SND -->|"ProduceRequest"| K["📦 Kafka Broker"]
+    K -->|"ACK"| SND
+```
+
+---
+
+### 2. Les Acknowledgments (ACKs)
+
+#### Niveaux d'ACK
+
+```mermaid
+flowchart TB
+    subgraph acks0["acks=0 (Fire & Forget)"]
+        P0["Producer"] -->|"Envoie"| B0["Broker"]
+        P0 -.->|"N'attend pas"| X0["❌"]
+    end
+    
+    subgraph acks1["acks=1 (Leader Only)"]
+        P1["Producer"] -->|"Envoie"| L1["Leader"]
+        L1 -->|"ACK"| P1
+        L1 -.->|"Réplique après"| F1["Follower"]
+    end
+    
+    subgraph acksAll["acks=all (Toutes les ISR)"]
+        P2["Producer"] -->|"Envoie"| L2["Leader"]
+        L2 -->|"Réplique"| F2["Follower 1"]
+        L2 -->|"Réplique"| F3["Follower 2"]
+        F2 -->|"ACK"| L2
+        F3 -->|"ACK"| L2
+        L2 -->|"ACK"| P2
+    end
+    
+    style acks0 fill:#ffebee
+    style acks1 fill:#fff3e0
+    style acksAll fill:#e8f5e9
+```
+
+#### Comparaison des modes ACK
+
+| Mode | Durabilité | Performance | Risque de perte |
+|------|------------|-------------|-----------------|
+| `acks=0` | ❌ Aucune | ⚡⚡⚡ Maximale | Élevé |
+| `acks=1` | ⚠️ Partielle | ⚡⚡ Bonne | Moyen |
+| `acks=all` | ✅ Complète | ⚡ Modérée | Minimal |
+
+---
+
+### 3. L'Idempotence en profondeur
+
+#### Le problème des doublons
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant B as Broker
+    
+    P->>B: Message "order-123"
+    B->>B: Write OK
+    B--xP: ACK perdu (réseau)
+    Note over P: Timeout → Retry
+    P->>B: Message "order-123" (retry)
+    B->>B: Write OK (DOUBLON !)
+    B-->>P: ACK
+    
+    Note over B: ❌ 2 messages identiques
+```
+
+#### Solution : Producer Idempotent
+
+```mermaid
+sequenceDiagram
+    participant P as Producer (PID=42)
+    participant B as Broker
+    
+    P->>B: Message "order-123" (seq=0)
+    B->>B: Write OK, store seq=0
+    B--xP: ACK perdu
+    Note over P: Timeout → Retry
+    P->>B: Message "order-123" (seq=0, retry)
+    B->>B: Check: seq=0 déjà vu → SKIP
+    B-->>P: ACK (avec offset original)
+    
+    Note over B: ✅ 1 seul message
+```
+
+#### Mécanisme interne
+
+| Concept | Description |
+|---------|-------------|
+| **PID** (Producer ID) | Identifiant unique du producer (assigné au démarrage) |
+| **Epoch** | Version du producer (incrémenté si redémarrage) |
+| **Sequence Number** | Numéro séquentiel par partition (0, 1, 2, ...) |
 
 ```
-Sans idempotence (plain):
-  Producer → [retry] → [retry] → Kafka = 3 messages identiques ❌
-
-Avec idempotence:
-  Producer → [retry] → [retry] → Kafka = 1 message unique ✅
+Message format avec idempotence:
+┌─────────────────────────────────────────────────┐
+│ PID: 42 │ Epoch: 0 │ SeqNum: 5 │ Partition: 0  │
+├─────────────────────────────────────────────────┤
+│                   Payload                        │
+└─────────────────────────────────────────────────┘
 ```
 
-### Configuration de l'idempotence
+---
 
-```properties
-enable.idempotence=true
-acks=all
-max.in.flight.requests.per.connection=5
+### 4. Retries et Gestion des erreurs
+
+#### Timeline des retries
+
+```mermaid
+gantt
+    title Scénario de retry avec succès
+    dateFormat X
+    axisFormat %s
+    
+    section Request 1
+    Envoi initial        :a1, 0, 1
+    Attente ACK         :a2, 1, 2
+    Timeout             :crit, a3, 2, 3
+    
+    section Retry 1
+    Backoff (100ms)     :b1, 3, 4
+    Retry               :b2, 4, 5
+    Attente ACK         :b3, 5, 6
+    Timeout             :crit, b4, 6, 7
+    
+    section Retry 2
+    Backoff (200ms)     :c1, 7, 9
+    Retry               :c2, 9, 10
+    ACK reçu            :done, c3, 10, 11
 ```
 
-### Envoi synchrone vs asynchrone
+#### Paramètres de retry
 
-| Mode | Comportement | Réponse HTTP | Cas d'usage |
-|------|--------------|--------------|-------------|
-| **Synchrone** | Attend l'ACK Kafka | 200 + offset | Simple, fiable |
-| **Asynchrone** | Retourne immédiatement | 202 + requestId | Haute performance |
+```mermaid
+flowchart LR
+    subgraph Timeouts["⏱️ Timeouts"]
+        RT["request.timeout.ms<br/>30s"]
+        DT["delivery.timeout.ms<br/>120s"]
+    end
+    
+    subgraph Retries["🔄 Retries"]
+        R["retries<br/>2147483647"]
+        RB["retry.backoff.ms<br/>100ms"]
+    end
+    
+    subgraph Constraint["⚠️ Contrainte"]
+        C["delivery.timeout.ms ≥<br/>request.timeout.ms +<br/>linger.ms"]
+    end
+```
 
-### Retries et timeouts
+#### Erreurs récupérables vs non-récupérables
 
-| Paramètre | Description | Valeur par défaut |
-|-----------|-------------|-------------------|
-| `retries` | Nombre max de tentatives | 2147483647 |
-| `request.timeout.ms` | Timeout par requête | 30000 |
-| `delivery.timeout.ms` | Timeout total de livraison | 120000 |
-| `retry.backoff.ms` | Délai entre retries | 100 |
+| Type | Exemples | Action |
+|------|----------|--------|
+| **Récupérable** | NetworkException, LeaderNotAvailable | Retry automatique |
+| **Non-récupérable** | InvalidTopicException, AuthorizationException | Échec immédiat |
+| **Fatal** | ProducerFenced, OutOfMemory | Arrêt du producer |
 
-### Partitionnement et clés
+---
 
-- **Sans clé** : Round-robin sur les partitions
-- **Avec clé** : Hash de la clé → partition déterministe
-- **Ordre garanti** : Uniquement au sein d'une même partition
+### 5. Synchrone vs Asynchrone
 
-### Log compaction
+#### Mode Synchrone
 
-La **compaction** conserve uniquement la dernière valeur pour chaque clé :
+```mermaid
+sequenceDiagram
+    participant C as Client HTTP
+    participant A as API
+    participant P as Producer
+    participant K as Kafka
+    
+    C->>A: POST /send (sync)
+    A->>P: send()
+    P->>K: ProduceRequest
+    K-->>P: ProduceResponse
+    P-->>A: RecordMetadata
+    A-->>C: 200 OK + offset
+    
+    Note over C,A: ⏱️ Client bloqué pendant l'envoi
+```
+
+#### Mode Asynchrone
+
+```mermaid
+sequenceDiagram
+    participant C as Client HTTP
+    participant A as API
+    participant P as Producer
+    participant K as Kafka
+    participant S as StatusStore
+    
+    C->>A: POST /send (async)
+    A->>P: send() + callback
+    A->>S: Store requestId=PENDING
+    A-->>C: 202 Accepted + requestId
+    
+    Note over C: Client libéré immédiatement
+    
+    P->>K: ProduceRequest
+    K-->>P: ProduceResponse
+    P->>S: Update requestId=OK
+    
+    C->>A: GET /status?requestId=...
+    A->>S: Get status
+    A-->>C: 200 OK + offset
+```
+
+#### Comparaison
+
+| Aspect | Synchrone | Asynchrone |
+|--------|-----------|------------|
+| **Latence perçue** | Haute | Basse |
+| **Complexité** | Simple | Plus complexe |
+| **Gestion d'erreur** | Immédiate | Différée (polling) |
+| **Débit** | Limité | Élevé |
+| **Cas d'usage** | APIs critiques | Haute performance |
+
+---
+
+### 6. Partitionnement et Clés
+
+#### Stratégies de partitionnement
+
+```mermaid
+flowchart TB
+    subgraph NoKey["Sans clé (Round-Robin)"]
+        M1["Msg 1"] --> P0a["Partition 0"]
+        M2["Msg 2"] --> P1a["Partition 1"]
+        M3["Msg 3"] --> P2a["Partition 2"]
+        M4["Msg 4"] --> P0a
+    end
+    
+    subgraph WithKey["Avec clé (Hash)"]
+        K1["key=A"] --> Hash1["hash('A') % 3 = 1"]
+        K2["key=B"] --> Hash2["hash('B') % 3 = 0"]
+        K3["key=A"] --> Hash3["hash('A') % 3 = 1"]
+        
+        Hash1 --> P1b["Partition 1"]
+        Hash2 --> P0b["Partition 0"]
+        Hash3 --> P1b
+    end
+    
+    style NoKey fill:#fff3e0
+    style WithKey fill:#e8f5e9
+```
+
+#### Garantie d'ordre avec les clés
 
 ```
-Avant compaction:
-  key1 → value1, key1 → value2, key2 → value3, key1 → value4
+Topic: orders (3 partitions)
 
-Après compaction:
-  key1 → value4, key2 → value3
+key="customer-42":
+  Partition 1: [order-1] → [order-2] → [order-3] ✅ Ordre garanti
+
+key="customer-99":
+  Partition 0: [order-A] → [order-B] → [order-C] ✅ Ordre garanti
+
+⚠️ Pas d'ordre garanti ENTRE les partitions
+```
+
+---
+
+### 7. Log Compaction
+
+#### Principe
+
+```mermaid
+flowchart LR
+    subgraph Before["Avant Compaction"]
+        B1["k1:v1"]
+        B2["k2:v1"]
+        B3["k1:v2"]
+        B4["k3:v1"]
+        B5["k1:v3"]
+        B6["k2:v2"]
+    end
+    
+    Compact["🔄 Compaction"]
+    
+    subgraph After["Après Compaction"]
+        A1["k3:v1"]
+        A2["k1:v3"]
+        A3["k2:v2"]
+    end
+    
+    Before --> Compact --> After
+```
+
+#### Cas d'usage
+
+| Scénario | Exemple | Clé | Valeur |
+|----------|---------|-----|--------|
+| **État utilisateur** | Profil client | userId | JSON profil |
+| **Position GPS** | Flotte véhicules | vehicleId | lat/long |
+| **Configuration** | Feature flags | featureName | enabled/disabled |
+| **Inventaire** | Stock produits | productId | quantité |
+
+---
+
+### 8. Toxiproxy : Simulation de pannes
+
+#### Architecture avec Toxiproxy
+
+```mermaid
+flowchart LR
+    subgraph Normal["Mode Normal"]
+        A1["API"] -->|"29092"| K1["Kafka"]
+    end
+    
+    subgraph Proxy["Mode Proxy"]
+        A2["API"] -->|"29093"| T["💀 Toxiproxy"]
+        T -->|"29092"| K2["Kafka"]
+        
+        subgraph Toxics["Effets injectables"]
+            L["⏱️ Latency"]
+            TO["⏹️ Timeout"]
+            BW["📉 Bandwidth"]
+            SL["🔀 Slicer"]
+        end
+    end
+    
+    style T fill:#fff3e0
+```
+
+#### Types de pannes simulables
+
+| Toxic | Effet | Paramètres |
+|-------|-------|------------|
+| **latency** | Ajoute un délai | `latency`, `jitter` |
+| **timeout** | Coupe la connexion après N ms | `timeout` |
+| **bandwidth** | Limite le débit | `rate` (KB/s) |
+| **slicer** | Fragmente les paquets | `average_size`, `delay` |
+| **slow_close** | Fermeture lente | `delay` |
+
+```json
+// Exemple : ajouter 5 secondes de latence
+{
+  "name": "latency",
+  "type": "latency",
+  "stream": "downstream",
+  "attributes": {
+    "latency": 5000,
+    "jitter": 500
+  }
+}
 ```
 
 ---
