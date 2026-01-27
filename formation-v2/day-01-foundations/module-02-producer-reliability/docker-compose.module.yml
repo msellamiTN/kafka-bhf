@@ -8,10 +8,11 @@ services:
     networks:
       - bhf-kafka-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8474/version"]
+      test: ["CMD", "/toxiproxy-cli", "list"]
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 5s
 
   toxiproxy-init:
     image: curlimages/curl:8.5.0
