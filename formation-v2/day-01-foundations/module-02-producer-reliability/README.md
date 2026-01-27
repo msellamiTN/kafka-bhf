@@ -1,135 +1,195 @@
-# Module 02 - Producer Reliability (Idempotence) - Self-Paced
+# Module 02 - Fiabilité du Producteur Kafka (Idempotence) - Formation Auto-rythmée
 
-## Objectif
+## Durée estimée
 
-Mettre en place deux APIs (**Java** et **.NET**) déployées via Docker et démontrer le rôle de l'idempotence côté producer lorsque des erreurs réseau provoquent des retries.
+⏱️ **60-90 minutes**
 
-## Ce que vous allez apprendre
+## Objectifs pédagogiques
 
-- Différence entre un producer **idempotent** et **non-idempotent**
-- Différence entre envoi **synchrone** (blocking) et **asynchrone** (callback)
-- Gestion des **callbacks** (acks / erreurs) et stratégie de traitement
-- Rôle des **retries** et des timeouts dans la fiabilité
-- Impact de la **clé** sur le partitionnement (ordre, scalabilité)
-- Pourquoi la **log compaction** dépend des keys
-- Pourquoi les retries réseau peuvent créer des doublons
-- Comment observer les événements dans Kafka (Kafka UI)
-- Comment injecter une panne réseau contrôlée via **Toxiproxy**
+À la fin de ce module, vous serez capable de :
 
-## Ports & endpoints
+1. ✅ Comprendre la différence entre un producer **idempotent** et **non-idempotent**
+2. ✅ Maîtriser l'envoi **synchrone** vs **asynchrone** et les callbacks
+3. ✅ Configurer les **retries** et **timeouts** pour la fiabilité
+4. ✅ Comprendre l'impact des **clés** sur le partitionnement
+5. ✅ Utiliser **Toxiproxy** pour simuler des pannes réseau
+6. ✅ Observer et déboguer les messages via **Kafka UI**
+7. ✅ Comprendre la **log compaction** et son utilité
 
-- Java API: `localhost:18080`
-  - `GET /health`
-  - `POST /api/v1/send?mode=plain|idempotent&eventId=...&sendMode=sync|async&key=...&partition=...`
-  - `GET /api/v1/status?requestId=...` (uniquement si `sendMode=async`)
-- .NET API: `localhost:18081`
-  - `GET /health`
-  - `POST /api/v1/send?mode=plain|idempotent&eventId=...&sendMode=sync|async&key=...&partition=...`
-  - `GET /api/v1/status?requestId=...` (uniquement si `sendMode=async`)
-- Toxiproxy API: `localhost:8474`
-- Kafka UI: `localhost:8080`
+---
 
-## Paramètres de tuning (retries / timeouts)
+## 📖 Concepts théoriques
 
-Pour expérimenter les comportements de retry, vous pouvez surcharger ces variables d’environnement dans `docker-compose.module.yml`.
+### Qu'est-ce que l'idempotence ?
 
-- Java API:
-  - `KAFKA_REQUEST_TIMEOUT_MS` (défaut: 1000)
-  - `KAFKA_DELIVERY_TIMEOUT_MS` (défaut: 120000)
-  - `KAFKA_RETRY_BACKOFF_MS` (défaut: 100)
-  - `KAFKA_RETRIES` (défaut: 10)
-  - `KAFKA_LINGER_MS` (défaut: 0)
-- .NET API:
-  - `KAFKA_REQUEST_TIMEOUT_MS` (défaut: 1000)
-  - `KAFKA_DELIVERY_TIMEOUT_MS` (défaut: 120000)
-  - `KAFKA_RETRY_BACKOFF_MS` (défaut: 100)
-  - `KAFKA_RETRIES` (défaut: 10)
-  - `KAFKA_LINGER_MS` (défaut: 0)
+L'**idempotence** garantit qu'un message envoyé plusieurs fois (à cause de retries) n'est écrit qu'**une seule fois** dans Kafka.
 
-## Rappels théoriques (ultra-pratiques)
+```
+Sans idempotence (plain):
+  Producer → [retry] → [retry] → Kafka = 3 messages identiques ❌
 
-### Synchrone vs asynchrone
+Avec idempotence:
+  Producer → [retry] → [retry] → Kafka = 1 message unique ✅
+```
 
-- **Synchrone**: l’API attend l’ack Kafka (HTTP 200 + offset). Simple, mais plus lent.
-- **Asynchrone**: l’API retourne tout de suite (HTTP 202) puis vous consultez le résultat via `/api/v1/status`.
+### Configuration de l'idempotence
 
-### Callbacks & erreurs
+```properties
+enable.idempotence=true
+acks=all
+max.in.flight.requests.per.connection=5
+```
 
-- En asynchrone, le résultat (OK/ERROR) arrive dans un **callback** (delivery report).
-- En pratique, on stocke un état (ex: `PENDING -> OK/ERROR`) et on expose un endpoint de suivi.
+### Envoi synchrone vs asynchrone
 
-### Retries & timeouts
+| Mode | Comportement | Réponse HTTP | Cas d'usage |
+|------|--------------|--------------|-------------|
+| **Synchrone** | Attend l'ACK Kafka | 200 + offset | Simple, fiable |
+| **Asynchrone** | Retourne immédiatement | 202 + requestId | Haute performance |
 
-- `retries` + `request.timeout.ms` + `delivery.timeout.ms` déterminent combien de temps le producer peut “s’acharner”.
-- Si le réseau est lent (latence), vous pouvez:
-  - augmenter les timeouts
-  - autoriser des retries
-  - activer l’idempotence
+### Retries et timeouts
 
-### Idempotence
+| Paramètre | Description | Valeur par défaut |
+|-----------|-------------|-------------------|
+| `retries` | Nombre max de tentatives | 2147483647 |
+| `request.timeout.ms` | Timeout par requête | 30000 |
+| `delivery.timeout.ms` | Timeout total de livraison | 120000 |
+| `retry.backoff.ms` | Délai entre retries | 100 |
 
-Idempotence = Kafka garantit “**pas de doublon**” pour un producer (session) même avec retries.
+### Partitionnement et clés
 
-Pré-requis usuels:
-
-- `enable.idempotence=true`
-- `acks=all`
-- `max.in.flight.requests.per.connection <= 5`
-
-### Partitionnement
-
-- La **clé** (`key`) détermine (par défaut) la **partition**.
-- L’ordre n’est garanti **que dans une partition**.
-- Forcer une `partition` est utile pour les demos, mais en prod on préfère la clé.
+- **Sans clé** : Round-robin sur les partitions
+- **Avec clé** : Hash de la clé → partition déterministe
+- **Ordre garanti** : Uniquement au sein d'une même partition
 
 ### Log compaction
 
-- Compaction fonctionne par **clé** (dernière valeur par clé).
-- Topic compacté = bon pour “état courant” (ex: profil client, dernier solde, dernière position).
+La **compaction** conserve uniquement la dernière valeur pour chaque clé :
 
-## Architecture
+```
+Avant compaction:
+  key1 → value1, key1 → value2, key2 → value3, key1 → value4
 
-```mermaid
-flowchart LR
-  J[Java API] -->|produce| P[(Toxiproxy)]
-  N[.NET API] -->|produce| P
-  P -->|proxy| K[(Kafka Broker)]
-
-  K --> UI[Kafka UI]
-
-  style K fill:#e8f5e8
-  style P fill:#fff3e0
+Après compaction:
+  key1 → value4, key2 → value3
 ```
 
-## Pré-requis
+---
 
-- Base stack démarrée:
+## 🏗️ Architecture du module
+
+```mermaid
+flowchart TB
+    subgraph Client["Votre Machine"]
+        curl["🖥️ curl / Postman"]
+    end
+    
+    subgraph Docker["Docker Environment"]
+        Java["☕ Java API<br/>Port: 18080"]
+        DotNet["🔷 .NET API<br/>Port: 18081"]
+        Toxi["💀 Toxiproxy<br/>Port: 8474"]
+        K["📦 Kafka Broker<br/>Port: 9092"]
+        UI["📊 Kafka UI<br/>Port: 8080"]
+    end
+    
+    curl --> Java
+    curl --> DotNet
+    Java -->|"via proxy"| Toxi
+    DotNet -->|"via proxy"| Toxi
+    Toxi -->|"injecte latence/erreurs"| K
+    K --> UI
+    
+    style Toxi fill:#fff3e0
+    style K fill:#e8f5e8
+```
+
+---
+
+## 🔌 Ports et endpoints
+
+### Services
+
+| Service | Port | URL |
+|---------|------|-----|
+| Java API | 18080 | http://localhost:18080 |
+| .NET API | 18081 | http://localhost:18081 |
+| Toxiproxy | 8474 | http://localhost:8474 |
+| Kafka UI | 8080 | http://localhost:8080 |
+
+### Endpoints des APIs
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/v1/send` | Envoyer un message |
+| GET | `/api/v1/status` | Statut d'un envoi async |
+
+### Paramètres de `/api/v1/send`
+
+| Paramètre | Valeurs | Description |
+|-----------|---------|-------------|
+| `mode` | `plain`, `idempotent` | Mode du producer |
+| `sendMode` | `sync`, `async` | Synchrone ou asynchrone |
+| `eventId` | string | Identifiant unique du message |
+| `key` | string (optionnel) | Clé de partitionnement |
+| `partition` | int (optionnel) | Partition cible |
+
+---
+
+## 📋 Pré-requis
+
+### Logiciels
+
+- ✅ Docker + Docker Compose
+- ✅ curl (ligne de commande)
+- ✅ Navigateur web
+
+### Cluster Kafka démarré
 
 ```bash
+cd formation-v2/
 ./scripts/up.sh
 ```
 
-Vérifiez que Kafka est prêt:
+**Vérification** :
 
 ```bash
-docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
+docker ps --format 'table {{.Names}}\t{{.Status}}' | grep kafka
 ```
 
-## Step-by-step
+**Résultat attendu** : `kafka` et `kafka-ui` sont `Up (healthy)`.
 
-## Lab 02.0 - Setup & smoke test
+---
 
-### Objectif (Lab 02.0)
+## 📚 Lab 02.0 - Démarrage du module
 
-Démarrer les services du module (Toxiproxy + Java API + .NET API) et vérifier que tout est prêt.
+### Objectif
 
-### Step 0 - Se placer au bon endroit
+Démarrer les services du module (APIs Java/.NET + Toxiproxy) et vérifier leur bon fonctionnement.
 
-Positionnez-vous dans le dossier `formation/formation-v2/`.
+---
 
-### Step 1 - Démarrer les services du module
+### Étape 1 - Positionnement
 
-Depuis le dossier `formation-v2/`:
+**Objectif** : Se placer dans le bon répertoire.
+
+```bash
+cd formation-v2/
+```
+
+---
+
+### Étape 2 - Démarrage des services
+
+**Objectif** : Lancer les conteneurs du module.
+
+**Explication** : Cette commande lance :
+- **Toxiproxy** : Proxy réseau pour injecter des pannes
+- **toxiproxy-init** : Configuration initiale du proxy (one-shot)
+- **m02-java-api** : API Spring Boot (Java)
+- **m02-dotnet-api** : API ASP.NET (.NET)
+
+**Commande** :
 
 ```bash
 docker compose -f infra/docker-compose.single-node.yml \
@@ -137,262 +197,540 @@ docker compose -f infra/docker-compose.single-node.yml \
   up -d --build
 ```
 
-Attendez ~1-2 minutes (le temps de build des images Java/.NET).
+**⏱️ Temps d'attente** : 2-3 minutes (build des images Java/.NET).
 
-### Step 2 - Vérifier l’état des conteneurs
+**Résultat attendu** :
 
-```bash
-docker ps --format '{{.Names}}\t{{.Status}}' | grep -E 'kafka$|kafka-ui$|toxiproxy$|m02-java-api$|m02-dotnet-api$|toxiproxy-init$'
+```
+[+] Running 5/5
+ ✔ Container toxiproxy        Started
+ ✔ Container toxiproxy-init   Started
+ ✔ Container m02-java-api     Started
+ ✔ Container m02-dotnet-api   Started
 ```
 
-Résultat attendu:
+---
 
-- `kafka`, `kafka-ui` sont `Up (healthy)`
-- `toxiproxy` est `Up`
-- `toxiproxy-init` peut être `Exited (0)` (c’est normal: one-shot)
-- `m02-java-api` et `m02-dotnet-api` sont `Up`
+### Étape 3 - Vérification des conteneurs
 
-### Step 3 - Vérifier la santé des APIs
+**Objectif** : S'assurer que tous les services sont opérationnels.
 
-```bash
-curl -fsS localhost:18080/health
-curl -fsS localhost:18081/health
-```
-
-Résultat attendu:
-
-- `OK` (pour chaque commande)
-
-### Checkpoint 02.0
-
-- Les conteneurs du module sont `Up`
-- `GET /health` répond `OK` pour Java et .NET
-
-## Lab 02.1 - Send synchrone (baseline)
-
-### Objectif (Lab 02.1)
-
-Envoyer un événement en **synchrone** et récupérer immédiatement le `partition/offset` (ack).
-
-### Step 4 - Envoyer un événement (mode plain, sync)
+**Commande** :
 
 ```bash
-EVENT_ID="PLAIN-$(date +%s)"
-curl -fsS -X POST "localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID" | cat
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-Résultat attendu:
+**Résultat attendu** :
 
-- Un JSON avec `topic=bhf-transactions` et un `offset`
+| Conteneur | Statut attendu |
+|-----------|----------------|
+| kafka | Up (healthy) |
+| kafka-ui | Up (healthy) |
+| toxiproxy | Up |
+| toxiproxy-init | Exited (0) ✅ normal |
+| m02-java-api | Up |
+| m02-dotnet-api | Up |
 
-### Checkpoint 02.1
+---
 
-- Vous obtenez un JSON avec `partition` et `offset`
+### Étape 4 - Test de santé des APIs
 
-### Step 5 - Observer l’événement dans Kafka UI
+**Objectif** : Vérifier que les APIs répondent.
 
-1. Ouvrez `localhost:8080`
-2. Cluster `BHF-Training`
-3. Topic `bhf-transactions`
-4. Onglet messages (consommer depuis le début)
-
-Vous devez retrouver votre `eventId`.
-
-## Lab 02.2 - Callbacks & erreurs (asynchrone)
-
-### Objectif (Lab 02.2)
-
-Utiliser `sendMode=async` et observer le résultat via `GET /api/v1/status` (OK/ERROR), comme un callback réel.
-
-### Step 6 - Injecter un problème réseau (latency) avec Toxiproxy
-
-Vérifier que le proxy existe:
+**Commandes** :
 
 ```bash
-curl -fsS localhost:8474/proxies | cat
+# Test Java API
+curl -fsS http://localhost:18080/health
+# Résultat attendu: OK
+
+# Test .NET API
+curl -fsS http://localhost:18081/health
+# Résultat attendu: OK
 ```
 
-Ajouter une latence (5s) sur le flux downstream:
+**✅ Checkpoint 02.0** : Les deux APIs répondent `OK`.
+
+---
+
+## 📚 Lab 02.1 - Envoi synchrone (baseline)
+
+### Objectif
+
+Envoyer un message en mode **synchrone** et comprendre la réponse avec l'offset.
+
+---
+
+### Étape 5 - Envoi d'un message synchrone (Java API)
+
+**Objectif** : Envoyer un message et recevoir l'ACK Kafka.
+
+**Théorie** : En mode **synchrone**, l'API attend la confirmation de Kafka avant de répondre. La réponse contient :
+- Le **topic** de destination
+- La **partition** utilisée
+- L'**offset** du message
+
+**Commande** :
 
 ```bash
-curl -fsS -H 'Content-Type: application/json' \
-  -X POST localhost:8474/proxies/kafka/toxics \
-  -d '{"name":"latency","type":"latency","stream":"downstream","attributes":{"latency":5000,"jitter":0}}' \
-  | cat
+# Générer un ID unique
+EVENT_ID="JAVA-SYNC-$(date +%s)"
+echo "EventId: $EVENT_ID"
+
+# Envoyer le message
+curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
 ```
 
-Supprimer la latence:
+**Résultat attendu** :
+
+```json
+{
+  "status": "OK",
+  "topic": "bhf-transactions",
+  "partition": 0,
+  "offset": 5,
+  "eventId": "JAVA-SYNC-1706400000"
+}
+```
+
+**Explication de la réponse** :
+
+| Champ | Description |
+|-------|-------------|
+| `status` | OK = message écrit avec succès |
+| `topic` | Topic de destination |
+| `partition` | Partition où le message est stocké |
+| `offset` | Position du message dans la partition |
+| `eventId` | Identifiant unique envoyé |
+
+---
+
+### Étape 6 - Envoi avec l'API .NET
+
+**Objectif** : Vérifier que l'API .NET fonctionne de la même manière.
+
+**Commande** :
 
 ```bash
-curl -fsS -X DELETE localhost:8474/proxies/kafka/toxics/latency >/dev/null || true
+EVENT_ID="DOTNET-SYNC-$(date +%s)"
+curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
 ```
 
-### Step 6bis - Envoi asynchrone + polling (Java)
+**✅ Checkpoint 02.1** : Les deux APIs retournent un JSON avec `partition` et `offset`.
+
+---
+
+### Étape 7 - Visualisation dans Kafka UI
+
+**Objectif** : Observer les messages envoyés.
+
+**Actions** :
+
+1. Ouvrez **http://localhost:8080**
+2. Cliquez sur le cluster **BHF-Training**
+3. Menu **Topics** → **bhf-transactions**
+4. Onglet **Messages** → **Fetch Messages**
+
+**Ce que vous devez voir** :
+- Vos messages avec les `eventId` envoyés
+- La partition et l'offset de chaque message
+- Le timestamp d'envoi
+
+---
+
+## 📚 Lab 02.2 - Envoi asynchrone et callbacks
+
+### Objectif
+
+Comprendre le mode **asynchrone** et comment récupérer le statut via polling.
+
+---
+
+### Étape 8 - Envoi asynchrone (Java)
+
+**Objectif** : Envoyer un message sans attendre l'ACK.
+
+**Théorie** : En mode **asynchrone** :
+1. L'API retourne immédiatement un `requestId`
+2. Le message est envoyé en arrière-plan
+3. Vous consultez le statut via `/api/v1/status`
+
+**Commande** :
 
 ```bash
 EVENT_ID="JAVA-ASYNC-$(date +%s)"
 
-REQ_ID=$(curl -fsS -X POST "localhost:18080/api/v1/send?mode=idempotent&sendMode=async&eventId=$EVENT_ID" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
-echo "requestId=$REQ_ID"
+# Envoyer en asynchrone
+RESPONSE=$(curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=idempotent&sendMode=async&eventId=$EVENT_ID")
+echo "Réponse: $RESPONSE"
 
-curl -fsS "localhost:18080/api/v1/status?requestId=$REQ_ID" | cat
+# Extraire le requestId
+REQ_ID=$(echo "$RESPONSE" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+echo "RequestId: $REQ_ID"
 ```
 
-### Step 6ter - Forcer une erreur (timeout) et vérifier le status (.NET)
+**Résultat attendu** :
+
+```json
+{
+  "status": "ACCEPTED",
+  "requestId": "abc123-def456",
+  "eventId": "JAVA-ASYNC-1706400000"
+}
+```
+
+---
+
+### Étape 9 - Consultation du statut
+
+**Objectif** : Récupérer le résultat de l'envoi asynchrone.
+
+**Commande** :
+
+```bash
+# Attendre 2 secondes pour que l'envoi se termine
+sleep 2
+
+# Consulter le statut
+curl -fsS "http://localhost:18080/api/v1/status?requestId=$REQ_ID"
+```
+
+**Résultat attendu (succès)** :
+
+```json
+{
+  "state": "OK",
+  "topic": "bhf-transactions",
+  "partition": 1,
+  "offset": 10
+}
+```
+
+**Résultat possible (en cours)** :
+
+```json
+{
+  "state": "PENDING"
+}
+```
+
+**✅ Checkpoint 02.2** : Vous savez envoyer en asynchrone et récupérer le statut.
+
+---
+
+## 📚 Lab 02.3 - Injection de pannes avec Toxiproxy
+
+### Objectif
+
+Simuler des problèmes réseau pour observer le comportement des retries.
+
+---
+
+### Étape 10 - Vérification du proxy Toxiproxy
+
+**Objectif** : Confirmer que le proxy Kafka est configuré.
+
+**Commande** :
+
+```bash
+curl -fsS http://localhost:8474/proxies | python3 -m json.tool
+```
+
+**Résultat attendu** : Un proxy nommé `kafka` avec :
+- `listen`: `0.0.0.0:29093`
+- `upstream`: `kafka:29092`
+
+---
+
+### Étape 11 - Injection de latence
+
+**Objectif** : Ajouter 5 secondes de latence sur les réponses Kafka.
+
+**Théorie** : La latence peut provoquer des **timeouts** côté producer, ce qui déclenche des **retries**.
+
+**Commande pour ajouter la latence** :
 
 ```bash
 curl -fsS -H 'Content-Type: application/json' \
-  -X POST localhost:8474/proxies/kafka/toxics \
-  -d '{"name":"timeout","type":"timeout","stream":"downstream","attributes":{"timeout":1}}' \
-  | cat
-
-EVENT_ID="DOTNET-ASYNC-FAIL-$(date +%s)"
-REQ_ID=$(curl -fsS -X POST "localhost:18081/api/v1/send?mode=plain&sendMode=async&eventId=$EVENT_ID" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
-echo "requestId=$REQ_ID"
-
-curl -fsS "localhost:18081/api/v1/status?requestId=$REQ_ID" | cat
-
-curl -fsS -X DELETE localhost:8474/proxies/kafka/toxics/timeout >/dev/null || true
+  -X POST http://localhost:8474/proxies/kafka/toxics \
+  -d '{
+    "name": "latency",
+    "type": "latency",
+    "stream": "downstream",
+    "attributes": {
+      "latency": 5000,
+      "jitter": 0
+    }
+  }'
 ```
 
-### Checkpoint 02.2
+**Vérification** :
 
-- En async vous voyez un `state=OK` (ou `ERROR` si Kafka est injoignable)
-- Vous savez récupérer le résultat via `/api/v1/status`
+```bash
+curl -fsS http://localhost:8474/proxies/kafka/toxics
+```
 
-## Lab 02.3 - Retries & Idempotence (checkpoint principal)
+---
 
-### Objectif (Lab 02.3)
+### Étape 12 - Test avec latence
 
-Provoquer des retries via latence réseau et prouver que:
+**Objectif** : Observer le comportement avec la latence.
 
-- En `plain`, des doublons peuvent apparaître.
-- En `idempotent`, **exactement 1** message est écrit pour un `eventId` donné.
+**Commande** :
 
-### Step 7 - Comparer plain vs idempotent sous panne réseau
+```bash
+EVENT_ID="LATENCY-TEST-$(date +%s)"
+time curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
+```
 
-Le but est de provoquer des retries (réseau lent), puis de constater:
+**Observation** : La requête prend ~5 secondes de plus que d'habitude.
 
-- En `plain`, un doublon peut apparaître.
-- En `idempotent`, vous devez obtenir **exactement 1** message pour un `eventId` donné.
+---
 
-Au lieu de le faire à la main, on passe au checkpoint automatisé.
+### Étape 13 - Suppression de la latence
 
-### Step 8 - Exécuter la validation (checkpoint)
+**Objectif** : Retirer la latence pour continuer les tests.
+
+**Commande** :
+
+```bash
+curl -fsS -X DELETE http://localhost:8474/proxies/kafka/toxics/latency
+```
+
+**Vérification** :
+
+```bash
+curl -fsS http://localhost:8474/proxies/kafka/toxics
+# Résultat: [] (liste vide)
+```
+
+---
+
+## 📚 Lab 02.4 - Idempotence vs Plain (test clé)
+
+### Objectif
+
+Prouver que l'idempotence évite les doublons lors des retries.
+
+---
+
+### Étape 14 - Exécution du test automatisé
+
+**Objectif** : Valider le comportement idempotent vs non-idempotent.
+
+**Explication** : Le script `validate.sh` :
+1. Injecte de la latence via Toxiproxy
+2. Envoie des messages en mode `plain` et `idempotent`
+3. Compte les messages dans Kafka
+4. Vérifie que `idempotent` = 1 message exactement
+
+**Commande** :
 
 ```bash
 ./day-01-foundations/module-02-producer-reliability/scripts/validate.sh
 ```
 
-Résultat attendu:
+**Résultat attendu** :
 
-- `OK: ...`
-
-Si vous voyez un `WARN` sur le mode plain, c’est acceptable (le doublon dépend du timing).
-
-### Checkpoint 02.3
-
-- Le script `validate.sh` termine par `OK`
-
-## Lab 02.4 - Partitionnement
-
-### Objectif (Lab 02.4)
-
-Comprendre comment la **key** influence la partition et pourquoi l’ordre est garanti **par partition**.
-
-### Step 9 - Partitionnement (clé vs partition)
-
-Envoyer explicitement sur 2 partitions différentes:
-
-```bash
-EVENT_ID="P0-$(date +%s)"
-curl -fsS -X POST "localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID&key=account-123&partition=0" | cat
-
-EVENT_ID="P1-$(date +%s)"
-curl -fsS -X POST "localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID&key=account-123&partition=1" | cat
+```
+OK: java_idempotent=1 java_plain=1 dotnet_idempotent=1 dotnet_plain=1
 ```
 
-Consommer et afficher partition/offset:
+**Note** : Si `java_plain` ou `dotnet_plain` > 1, c'est normal ! Cela prouve que les retries peuvent créer des doublons sans idempotence.
+
+**✅ Checkpoint 02.4** : L'idempotence produit exactement 1 message.
+
+---
+
+## 📚 Lab 02.5 - Partitionnement
+
+### Objectif
+
+Comprendre comment les clés influencent le partitionnement.
+
+---
+
+### Étape 15 - Envoi sur des partitions différentes
+
+**Objectif** : Envoyer des messages sur des partitions spécifiques.
+
+**Commandes** :
+
+```bash
+# Message sur partition 0
+curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=P0-$(date +%s)&partition=0"
+
+# Message sur partition 1
+curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=P1-$(date +%s)&partition=1"
+
+# Message sur partition 2
+curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=P2-$(date +%s)&partition=2"
+```
+
+---
+
+### Étape 16 - Vérification des partitions
+
+**Objectif** : Confirmer la distribution des messages.
+
+**Commande** :
 
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic bhf-transactions \
   --from-beginning \
-  --timeout-ms 10000 \
+  --timeout-ms 5000 \
   --property print.partition=true \
   --property print.offset=true
 ```
 
-### Checkpoint 02.4
+**Résultat attendu** : Messages sur différentes partitions (0, 1, 2).
 
-- Vous voyez des messages apparaître sur des partitions différentes
+---
 
-## Lab 02.5 - Log compaction
+## 📚 Lab 02.6 - Log compaction
 
-### Objectif (Lab 02.5)
+### Objectif
 
-Comprendre le principe “dernière valeur par key” et pourquoi la compaction nécessite une key.
+Comprendre la compaction et son utilité pour les états.
 
-### Step 10 - Créer un topic compacté + produire plusieurs versions
+---
 
-Créer un topic compacté (démo):
+### Étape 17 - Création d'un topic compacté
+
+**Objectif** : Créer un topic avec la politique de compaction.
+
+**Commande** :
 
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create --if-not-exists \
   --topic bhf-compact-demo \
-  --partitions 3 \
+  --partitions 1 \
   --replication-factor 1 \
   --config cleanup.policy=compact \
   --config segment.ms=1000 \
-  --config min.cleanable.dirty.ratio=0.01 \
-  --config delete.retention.ms=1000
+  --config min.cleanable.dirty.ratio=0.01
 ```
 
-Envoyer 3 valeurs avec la **même key**:
+---
+
+### Étape 18 - Envoi de plusieurs versions
+
+**Objectif** : Envoyer plusieurs valeurs pour la même clé.
+
+**Commande** :
 
 ```bash
 KEY="customer-42"
-curl -fsS -X POST "localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V1&key=$KEY" | cat
-curl -fsS -X POST "localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V2&key=$KEY" | cat
-curl -fsS -X POST "localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V3&key=$KEY" | cat
+
+# Version 1
+curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V1&key=$KEY"
+
+# Version 2
+curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V2&key=$KEY"
+
+# Version 3 (finale)
+curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V3&key=$KEY"
 ```
 
-### Checkpoint 02.5
+**Note** : Après compaction (asynchrone), seul `V3` sera conservé pour `customer-42`.
 
-- Vous comprenez que la compaction est asynchrone
-- Vous savez qu’à terme Kafka conservera la dernière valeur par key
+**✅ Checkpoint 02.6** : Vous comprenez la log compaction.
 
-## Checkpoint
+---
 
-- L'envoi **idempotent** doit produire **1 seul événement** pour un `eventId` donné.
-- L'envoi **non-idempotent** peut produire **1 ou plusieurs événements** pour un `eventId` donné (selon la répétition observée).
+## ✅ Récapitulatif des checkpoints
 
-## Troubleshooting
+| # | Checkpoint | Statut |
+|---|------------|--------|
+| 02.0 | APIs Java et .NET répondent OK | ☐ |
+| 02.1 | Envoi synchrone retourne partition/offset | ☐ |
+| 02.2 | Envoi asynchrone + récupération du statut | ☐ |
+| 02.3 | Injection de latence via Toxiproxy | ☐ |
+| 02.4 | Script validate.sh retourne OK | ☐ |
+| 02.5 | Messages sur différentes partitions | ☐ |
+| 02.6 | Compréhension de la log compaction | ☐ |
 
-### APIs en erreur / timeout
+---
 
-- Vérifiez les logs:
+## 🔧 Troubleshooting
+
+### APIs ne démarrent pas
+
+**Symptôme** : `m02-java-api` ou `m02-dotnet-api` en erreur.
+
+**Solution** :
 
 ```bash
-docker logs -n 200 m02-java-api
-docker logs -n 200 m02-dotnet-api
+# Vérifier les logs
+docker logs m02-java-api --tail 100
+docker logs m02-dotnet-api --tail 100
+
+# Reconstruire les images
+docker compose -f infra/docker-compose.single-node.yml \
+  -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
+  up -d --build --force-recreate
 ```
 
-### Kafka non accessible
+### Toxiproxy ne répond pas
 
-- Vérifiez le base stack:
+**Symptôme** : `curl: (7) Failed to connect to localhost port 8474`.
+
+**Solution** :
 
 ```bash
-docker ps --format '{{.Names}}\t{{.Status}}' | grep kafka
+docker logs toxiproxy
+docker restart toxiproxy
 ```
 
-## Nettoyage
+### Messages non visibles dans Kafka UI
+
+**Symptôme** : Le topic existe mais pas de messages.
+
+**Solution** :
+
+1. Cliquez sur **Fetch Messages**
+2. Réglez le filtre sur **Earliest** (depuis le début)
+3. Vérifiez le bon topic (`bhf-transactions`)
+
+---
+
+## 🧹 Nettoyage
+
+**Objectif** : Arrêter les services du module.
+
+**Commande** :
 
 ```bash
 docker compose -f infra/docker-compose.single-node.yml \
   -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
   down
 ```
+
+---
+
+## 📖 Pour aller plus loin
+
+### Exercices supplémentaires
+
+1. **Modifiez les timeouts** dans `docker-compose.module.yml` et observez l'impact
+2. **Injectez un timeout complet** avec Toxiproxy et observez les erreurs
+3. **Testez avec différentes clés** et observez la distribution sur les partitions
+
+### Ressources
+
+- [Kafka Producer Configuration](https://kafka.apache.org/documentation/#producerconfigs)
+- [Idempotent Producer](https://kafka.apache.org/documentation/#semantics)
+- [Toxiproxy Documentation](https://github.com/Shopify/toxiproxy)
+
+---
+
+## ➡️ Module suivant
+
+Une fois ce module terminé, passez au :
+
+👉 **[Module 03 - Consumer Read-Committed](../module-03-consumer-read-committed/README.md)**
