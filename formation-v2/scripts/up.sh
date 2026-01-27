@@ -22,11 +22,11 @@ MODE=${1:-single-node}
 
 if [ "$MODE" = "cluster" ]; then
     COMPOSE_FILE="$CLUSTER_FILE"
-    CONTAINERS="kafka1 kafka2 kafka3 kafka-ui portainer"
+    CONTAINERS="kafka1 kafka2 kafka3 kafka-ui"
     echo "Starting Kafka KRaft CLUSTER (3 nodes)..."
 elif [ "$MODE" = "single-node" ]; then
     COMPOSE_FILE="$SINGLE_NODE_FILE"
-    CONTAINERS="kafka kafka-ui portainer"
+    CONTAINERS="kafka kafka-ui"
     echo "Starting Kafka KRaft SINGLE NODE..."
 else
     echo "Usage: $0 [single-node|cluster]"
@@ -35,7 +35,7 @@ else
     exit 1
 fi
 
-# Check for conflicts before starting
+# Check for conflicts before starting (Portainer excluded - persistent)
 echo "Checking for existing containers..."
 for container in $CONTAINERS; do
     container_conflict "$container"

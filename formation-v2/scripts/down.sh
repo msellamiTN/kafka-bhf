@@ -11,11 +11,11 @@ MODE=${1:-single-node}
 
 if [ "$MODE" = "cluster" ]; then
     COMPOSE_FILE="$CLUSTER_FILE"
-    CONTAINERS="kafka1 kafka2 kafka3 kafka-ui portainer"
+    CONTAINERS="kafka1 kafka2 kafka3 kafka-ui"
     echo "Stopping Kafka KRaft CLUSTER..."
 elif [ "$MODE" = "single-node" ]; then
     COMPOSE_FILE="$SINGLE_NODE_FILE"
-    CONTAINERS="kafka kafka-ui portainer"
+    CONTAINERS="kafka kafka-ui"
     echo "Stopping Kafka KRaft SINGLE NODE..."
 else
     echo "Usage: $0 [single-node|cluster]"
@@ -27,7 +27,7 @@ fi
 # Bring down the stack
 docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" down -v --remove-orphans
 
-# Defensive cleanup for fixed container names
+# Defensive cleanup for fixed container names (Portainer excluded - persistent)
 for container in $CONTAINERS; do
     docker rm -f "$container" 2>/dev/null || true
 done
