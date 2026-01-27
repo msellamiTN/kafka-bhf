@@ -115,7 +115,7 @@ app.MapPost("/api/v1/send", async (HttpRequest request) =>
     var async = sendMode.Equals("async", StringComparison.OrdinalIgnoreCase)
                 || sendMode.Equals("asynchronous", StringComparison.OrdinalIgnoreCase);
 
-    var value = $$"{\"eventId\":\"{{eventId}}\",\"mode\":\"{{mode}}\",\"sendMode\":\"{{sendMode}}\",\"api\":\"dotnet\",\"ts\":\"{{DateTimeOffset.UtcNow:O}}\"}";
+    var value = $"{{\"eventId\":\"{eventId}\",\"mode\":\"{mode}\",\"sendMode\":\"{sendMode}\",\"api\":\"dotnet\",\"ts\":\"{DateTimeOffset.UtcNow:O}\"}}";
     var message = new Message<string, string> { Key = key, Value = value };
 
     var producer = idempotent ? idempotentProducer.Value : plainProducer.Value;
