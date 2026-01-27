@@ -432,21 +432,23 @@ flowchart TB
     subgraph Docker["Docker Environment"]
         Java["☕ Java API<br/>Port: 18080"]
         DotNet["🔷 .NET API<br/>Port: 18081"]
-        Toxi["💀 Toxiproxy<br/>Port: 8474"]
-        K["📦 Kafka Broker<br/>Port: 9092"]
+        Toxi["💀 Toxiproxy<br/>Port: 8474<br/>(tests de pannes)"]
+        K["📦 Kafka Broker<br/>Port: 29092"]
         UI["📊 Kafka UI<br/>Port: 8080"]
     end
     
     curl --> Java
     curl --> DotNet
-    Java -->|"via proxy"| Toxi
-    DotNet -->|"via proxy"| Toxi
-    Toxi -->|"injecte latence/erreurs"| K
+    Java -->|"kafka:29092"| K
+    DotNet -->|"kafka:29092"| K
+    Toxi -.->|"proxy disponible<br/>sur :29093"| K
     K --> UI
     
     style Toxi fill:#fff3e0
     style K fill:#e8f5e8
 ```
+
+> **Note** : Les APIs se connectent directement à Kafka. Toxiproxy est disponible sur le port 29093 pour les tests d'injection de pannes manuels.
 
 ---
 
@@ -493,7 +495,8 @@ flowchart TB
 
 ```bash
 cd formation-v2/
-./scripts/up.sh
+./scripts/up.sh   # Mode single-node par défaut
+# ou: ./scripts/up.sh cluster   # Mode cluster 3 brokers
 ```
 
 **Vérification** :
@@ -537,9 +540,8 @@ cd formation-v2/
 **Commande** :
 
 ```bash
-docker compose -f infra/docker-compose.single-node.yml \
-  -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
-  up -d --build
+# Si le cluster Kafka est déjà démarré via ./scripts/up.sh :
+docker compose -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml up -d --build
 ```
 
 **⏱️ Temps d'attente** : 2-3 minutes (build des images Java/.NET).
@@ -547,8 +549,8 @@ docker compose -f infra/docker-compose.single-node.yml \
 **Résultat attendu** :
 
 ```
-[+] Running 5/5
- ✔ Container toxiproxy        Started
+[+] Running 4/4
+ ✔ Container toxiproxy        Healthy
  ✔ Container toxiproxy-init   Started
  ✔ Container m02-java-api     Started
  ✔ Container m02-dotnet-api   Started
@@ -1016,8 +1018,7 @@ docker logs m02-java-api --tail 100
 docker logs m02-dotnet-api --tail 100
 
 # Reconstruire les images
-docker compose -f infra/docker-compose.single-node.yml \
-  -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
+docker compose -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
   up -d --build --force-recreate
 ```
 
@@ -1028,8 +1029,19 @@ docker compose -f infra/docker-compose.single-node.yml \
 **Solution** :
 
 ```bash
+# Vérifier les logs
 docker logs toxiproxy
-docker restart toxiproxy
+
+# Vérifier le healthcheck
+docker inspect toxiproxy --format='{{.State.Health.Status}}'
+
+# Redémarrer si nécessaire
+docker compose -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml restart toxiproxy
+
+# Recréer le proxy après redémarrage
+curl -fsS -X POST http://localhost:8474/proxies \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"kafka","listen":"0.0.0.0:29093","upstream":"kafka:29092"}'
 ```
 
 ### Messages non visibles dans Kafka UI
@@ -1051,9 +1063,11 @@ docker restart toxiproxy
 **Commande** :
 
 ```bash
-docker compose -f infra/docker-compose.single-node.yml \
-  -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml \
-  down
+# Arrêter uniquement le module
+docker compose -f day-01-foundations/module-02-producer-reliability/docker-compose.module.yml down
+
+# Arrêter tout (module + cluster Kafka)
+./scripts/down.sh
 ```
 
 ---
