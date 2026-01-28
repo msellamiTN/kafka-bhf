@@ -26,16 +26,14 @@
 
 ```mermaid
 flowchart LR
-    subgraph spark["🔥 SPARK/FLINK"]
-        S1["• Cluster dédié"]
-        S2["• Ressources ++"]
-        S3["• Batch + Stream"]
+    subgraph spark["🔥 Spark/Flink"]
+        S1["Cluster"]
+        S2["Heavy"]
     end
     
-    subgraph streams["🌊 KAFKA STREAMS"]
-        K1["• Simple JAR"]
-        K2["• Léger & embarqué"]
-        K3["• Stream only"]
+    subgraph streams["🌊 Kafka Streams"]
+        K1["JAR"]
+        K2["Light"]
     end
     
     style streams fill:#e8f5e9
@@ -51,19 +49,10 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    IT["📥 INPUT TOPIC"] --> APP
+    IT["📥 Input"] --> SRC["Source"] --> PROC["⚙️ Process"] --> SINK["Sink"] --> OT["� Output"]
+    PROC -.-> SS[("� State")]
     
-    subgraph APP["🌊 KAFKA STREAMS APP"]
-        direction TB
-        subgraph TOP["Topology"]
-            SRC["Source"] --> PROC["Processor"] --> SINK["Sink"]
-        end
-        SS[("💾 State Store")]
-    end
-    
-    APP --> OT["📤 OUTPUT TOPIC"]
-    
-    style APP fill:#e3f2fd
+    style PROC fill:#e3f2fd
 ```
 
 ---
@@ -81,22 +70,15 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph kstream["📜 KSTREAM (flux)"]
-        E1["alice: +10"]
-        E2["bob: +5"]
-        E3["alice: +20"]
-        E4["alice: -5"]
+    subgraph ks["📜 KStream"]
+        E1["a:+10, b:+5, a:+20"]
     end
-    
-    kstream -->|"agrégation"| ktable
-    
-    subgraph ktable["📊 KTABLE (état)"]
-        T1["alice: 25"]
-        T2["bob: 5"]
+    ks -->|"Σ"| kt
+    subgraph kt["📊 KTable"]
+        T1["a:30, b:5"]
     end
-    
-    style kstream fill:#fff3cd
-    style ktable fill:#e8f5e9
+    style ks fill:#fff3cd
+    style kt fill:#e8f5e9
 ```
 
 > **KStream** = Chaque message est un événement distinct  
@@ -123,22 +105,10 @@ KTable<String, Customer> customers = builder.table("customers");
 
 ```mermaid
 flowchart LR
-    subgraph map["🔄 MAP (1:1)"]
-        MA[A] --> Ma[a]
-        MB[B] --> Mb[b]
-        MC[C] --> Mc[c]
-    end
-    
-    subgraph filter["🔍 FILTER"]
-        F1[1] -.->|"❌"| FX[ ]
-        F2[2] -->|"✅"| F2o[2]
-        F3[3] -->|"✅"| F3o[3]
-    end
-    
-    subgraph flatmap["📤 FLATMAP (1:N)"]
-        FM["A B C"] --> FMA[A]
-        FM --> FMB[B]
-        FM --> FMC[C]
+    subgraph ops["STATELESS OPS"]
+        M["map: A→a"]
+        F["filter: [1,2,3]→[2,3]"]
+        FM["flatMap: 'AB'→[A,B]"]
     end
 ```
 
@@ -153,25 +123,15 @@ stream.map((key, value) -> KeyValue.pair(key.toUpperCase(), value * 2))
 
 ```mermaid
 flowchart LR
-    subgraph agg["📊 AGGREGATE"]
-        IN1["alice:10, bob:5, alice:15"] --> OUT1["alice:25, bob:5"]
+    subgraph stateful["STATEFUL OPS"]
+        AGG["📊 aggregate"]
+        JOIN["🔗 join"]
+        WIN["⏱️ window"]
     end
     
-    subgraph join["🔗 JOIN"]
-        ORD["Orders (stream)"] --> J{"⋈"}
-        CUST["Customers (table)"] --> J
-        J --> ENR["Enriched Orders"]
-    end
-    
-    subgraph window["⏱️ WINDOWED"]
-        W1["[0-5]: 3"]
-        W2["[5-10]: 5"]
-        W3["[10-15]: 2"]
-    end
-    
-    style agg fill:#e8f5e9
-    style join fill:#e3f2fd
-    style window fill:#fff3cd
+    style AGG fill:#e8f5e9
+    style JOIN fill:#e3f2fd
+    style WIN fill:#fff3cd
 ```
 
 ---

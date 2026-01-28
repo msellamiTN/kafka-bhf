@@ -21,15 +21,7 @@
 
 ```mermaid
 flowchart TB
-    subgraph pyramid["PYRAMIDE DES TESTS"]
-        direction TB
-        E2E["🌐 E2E Tests<br/>Peu, lents, coûteux"]
-        INT["🔗 Integration Tests<br/>Testcontainers"]
-        UNIT["✅ Unit Tests<br/>Beaucoup, rapides"]
-    end
-    
-    E2E --- INT --- UNIT
-    
+    E2E["🌐 E2E"] --- INT["🔗 Integration"] --- UNIT["✅ Unit"]
     style UNIT fill:#e8f5e9
     style INT fill:#fff3cd
     style E2E fill:#ffcccc
@@ -107,21 +99,9 @@ void testConsumerProcessesMessages() {
 ### 3. Tests d'intégration avec Testcontainers
 
 ```mermaid
-flowchart TB
-    subgraph workflow["TESTCONTAINERS WORKFLOW"]
-        direction TB
-        T1["🎬 1. Test Start<br/>JUnit Test"]
-        T2["🐳 2. Container Startup<br/>Kafka + App Containers"]
-        T3["▶️ 3. Test Execution<br/>Produce → Consume → Assert"]
-        T4["🧹 4. Cleanup<br/>Containers stopped"]
-        
-        T1 --> T2 --> T3 --> T4
-    end
-    
-    style T1 fill:#e3f2fd
-    style T2 fill:#fff3cd
+flowchart LR
+    T1["🎬 Start"] --> T2["🐳 Containers"] --> T3["▶️ Test"] --> T4["🧹 Cleanup"]
     style T3 fill:#e8f5e9
-    style T4 fill:#f5f5f5
 ```
 
 #### Configuration Testcontainers

@@ -25,30 +25,10 @@
 
 ```mermaid
 flowchart LR
-    subgraph sources["SOURCES"]
-        DB1[("🗄️ DB")]
-        FILE1["📄 Files"]
-        API1["🌐 API"]
-    end
+    SRC["🗄️ Sources"] --> SC["🔌 Source"] --> T[("� Kafka")] --> SK["� Sink"] --> SNK["🗄️ Sinks"]
     
-    subgraph connect["KAFKA CONNECT"]
-        SC["🔌 Source<br/>Connector"]
-        SK["🔌 Sink<br/>Connector"]
-    end
-    
-    subgraph kafka["KAFKA"]
-        T[("📦 Topics")]
-    end
-    
-    subgraph sinks["SINKS"]
-        DB2[("🗄️ DB")]
-        FILE2["📄 Files"]
-        S3["☁️ S3"]
-    end
-    
-    sources --> SC --> T --> SK --> sinks
-    
-    style connect fill:#e3f2fd
+    style SC fill:#e8f5e9
+    style SK fill:#fff3cd
 ```
 
 #### Concepts clés
@@ -65,21 +45,15 @@ flowchart LR
 ### 2. Types de connecteurs
 
 ```mermaid
-flowchart TB
-    subgraph source["📥 SOURCE CONNECTOR"]
-        direction TB
-        EXT1["External System<br/>(DB, File)"] -->|READ| SRC["🔌 Source Connector"]
-        SRC -->|PRODUCE| KT1[("📦 Kafka Topics")]
+flowchart LR
+    subgraph src["📥 SOURCE"]
+        E1["DB/File"] -->|read| S1["🔌"] -->|produce| K1["Kafka"]
     end
-    
-    subgraph sink["📤 SINK CONNECTOR"]
-        direction TB
-        KT2[("📦 Kafka Topics")] -->|CONSUME| SNK["🔌 Sink Connector"]
-        SNK -->|WRITE| EXT2["External System<br/>(DB, File, S3)"]
+    subgraph snk["📤 SINK"]
+        K2["Kafka"] -->|consume| S2["🔌"] -->|write| E2["DB/S3"]
     end
-    
-    style source fill:#e8f5e9
-    style sink fill:#fff3cd
+    style src fill:#e8f5e9
+    style snk fill:#fff3cd
 ```
 
 #### Connecteurs populaires
@@ -99,17 +73,14 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    subgraph standalone["💻 STANDALONE"]
-        W1["Worker<br/>Connector + Task"]
+    subgraph sa["💻 Standalone"]
+        W1["1 Worker"]
     end
-    
-    subgraph distributed["☁️ DISTRIBUTED"]
-        W2["Worker 1<br/>Task A, C"]
-        W3["Worker 2<br/>Task B, D"]
+    subgraph di["☁️ Distributed"]
+        W2["W1"]
+        W3["W2"]
     end
-    
-    style standalone fill:#fff3cd
-    style distributed fill:#e8f5e9
+    style di fill:#e8f5e9
 ```
 
 | Mode | Avantages | Inconvénients |

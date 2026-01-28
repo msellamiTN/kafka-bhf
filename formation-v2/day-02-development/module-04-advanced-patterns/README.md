@@ -24,19 +24,19 @@
 Un **Dead Letter Topic** est un topic spécial où sont envoyés les messages qui ne peuvent pas être traités après plusieurs tentatives. C'est un pattern essentiel pour la résilience des applications.
 
 ```mermaid
-flowchart TD
-    P["📤 Producer"] --> T["📦 Main Topic<br/>(orders)"]
-    T --> C["⚙️ Consumer Processing"]
-    C --> D{"Traitement OK?"}
-    D -->|OUI| CO["✅ Commit Offset"]
-    D -->|NON| R["🔄 Retry (1,2,3)"]
-    R --> MR{"Max retries?"}
-    MR -->|NON| C
-    MR -->|OUI| DLT["💀 DLT Topic"]
-    
+flowchart LR
+    subgraph flow[" "]
+        direction LR
+        P["📤 Producer"] --> T["📦 Topic"]
+        T --> C["⚙️ Consumer"]
+        C --> D{OK?}
+        D -->|✅| CO["Commit"]
+        D -->|❌| R["Retry"]
+        R -->|max| DLT["💀 DLT"]
+        R -->|retry| C
+    end
     style DLT fill:#ffcccc
     style CO fill:#ccffcc
-    style R fill:#fff3cd
 ```
 
 #### Quand utiliser un DLT ?
@@ -71,24 +71,23 @@ flowchart TD
 #### Types de Retry
 
 ```mermaid
-flowchart LR
-    subgraph immediate["1️⃣ RETRY IMMÉDIAT"]
-        I1[T1] -->|0ms| I2[T2] -->|0ms| I3[T3] -->|0ms| ID[DLT]
+flowchart TB
+    subgraph strategies["STRATÉGIES DE RETRY"]
+        direction TB
+        subgraph s1["1️⃣ Immédiat"]
+            A1["T1→T2→T3→DLT"]
+        end
+        subgraph s2["2️⃣ Fixe (1s)"]
+            A2["T1─1s─T2─1s─T3"]
+        end
+        subgraph s3["3️⃣ Exponentiel ✅"]
+            A3["T1─1s─T2─2s─T3─4s"]
+        end
+        subgraph s4["4️⃣ Expo+Jitter"]
+            A4["T1─1s±─T2─2s±─T3"]
+        end
     end
-    
-    subgraph fixed["2️⃣ BACKOFF FIXE"]
-        F1[T1] -->|1000ms| F2[T2] -->|1000ms| F3[T3] -->|1000ms| FD[DLT]
-    end
-    
-    subgraph expo["3️⃣ BACKOFF EXPONENTIEL ✅"]
-        E1[T1] -->|1s| E2[T2] -->|2s| E3[T3] -->|4s| ED[DLT]
-    end
-    
-    subgraph jitter["4️⃣ EXPO + JITTER"]
-        J1[T1] -->|1s±0.2s| J2[T2] -->|2s±0.4s| J3[T3] -->|4s±0.8s| JD[DLT]
-    end
-    
-    style expo fill:#e8f5e9
+    style s3 fill:#e8f5e9
 ```
 
 #### Configuration recommandée
@@ -125,20 +124,20 @@ Le **rebalancing** est le processus par lequel Kafka redistribue les partitions 
 
 ```mermaid
 flowchart LR
-    subgraph avant["AVANT (2 consumers)"]
-        C1A["Consumer 1<br/>P0, P1, P2"]
-        C2A["Consumer 2<br/>P3, P4, P5"]
+    subgraph avant["AVANT"]
+        C1["C1: P0,P1,P2"]
+        C2["C2: P3,P4,P5"]
     end
     
-    avant -->|"🔄 Rebalancing"| apres
+    avant -->|"🔄"| apres
     
-    subgraph apres["APRÈS (3 consumers)"]
-        C1B["Consumer 1<br/>P0, P1"]
-        C2B["Consumer 2<br/>P2, P3"]
-        C3B["Consumer 3 🆕<br/>P4, P5"]
+    subgraph apres["APRÈS"]
+        C1B["C1: P0,P1"]
+        C2B["C2: P2,P3"]
+        C3B["C3: P4,P5"]
     end
     
-    style C3B fill:#fff3cd
+    style C3B fill:#e8f5e9
 ```
 
 > ⚠️ **PENDANT LE REBALANCING** : Aucun consumer ne traite de messages!
@@ -180,25 +179,19 @@ consumer.subscribe(topics, new ConsumerRebalanceListener() {
 #### Hiérarchie des erreurs Kafka
 
 ```mermaid
-flowchart TD
-    KE["🔴 KafkaException"] --> RP["🔄 Retriable<br/>(Producer)"]
-    KE --> RC["🔄 Retriable<br/>(Consumer)"]
-    KE --> FE["💀 Fatal Errors"]
+flowchart LR
+    KE["KafkaException"] --> RP["🔄 Retriable"]
+    KE --> FE["💀 Fatal"]
     
-    RP --> RP1["• Timeout"]
-    RP --> RP2["• Not enough replicas"]
-    RP --> RP3["• Leader not available"]
+    RP --> R1["Timeout"]
+    RP --> R2["Leader N/A"]
+    RP --> R3["Rebalance"]
     
-    RC --> RC1["• Rebalance"]
-    RC --> RC2["• Offset out of range"]
-    RC --> RC3["• Coordinator not available"]
-    
-    FE --> FE1["• Auth failure"]
-    FE --> FE2["• Invalid config"]
-    FE --> FE3["• Serialization error"]
+    FE --> F1["Auth fail"]
+    FE --> F2["Bad config"]
+    FE --> F3["Serialize err"]
     
     style RP fill:#fff3cd
-    style RC fill:#fff3cd
     style FE fill:#ffcccc
 ```
 

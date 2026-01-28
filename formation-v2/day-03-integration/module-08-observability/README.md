@@ -20,27 +20,10 @@
 ### 1. Métriques clés Kafka
 
 ```mermaid
-flowchart TB
-    subgraph broker["🖥️ BROKER METRICS"]
-        B1["UnderReplicatedPartitions"]
-        B2["OfflinePartitionsCount"]
-        B3["BytesIn/OutPerSec"]
-    end
-    
-    subgraph producer["📤 PRODUCER METRICS"]
-        P1["record-send-rate"]
-        P2["record-error-rate"]
-        P3["request-latency-avg"]
-    end
-    
-    subgraph consumer["📥 CONSUMER METRICS"]
-        C1["records-consumed-rate"]
-        C2["🔥 records-lag (LAG)"]
-        C3["fetch-latency-avg"]
-    end
-    
-    style consumer fill:#ffcccc
-    style C2 fill:#ff6b6b,color:#fff
+flowchart LR
+    B["🖥️ Broker"] --- P["📤 Producer"] --- C["📥 Consumer"]
+    C --> LAG["🔥 LAG"]
+    style LAG fill:#ff6b6b,color:#fff
 ```
 
 ---
@@ -49,19 +32,10 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    subgraph topic["Topic: orders (partition 0)"]
-        direction LR
-        O0["█ 0"] --> O1["█ 1"] --> O2["█ 2"] --> O3["█ 3"] --> O4["█ 4"] --> O5["█ 5"] --> O6["█ 6"] --> O7["█ 7"] --> O8["█ 8"]
-        O8 -.-> O9["░ 9"] -.-> O10["░ 10"] -.-> O11["░ 11"] -.-> O12["░ 12"]
+    subgraph lag["LAG = 4"]
+        CO["Consumer: 8"] -.->|"🔥 LAG"| LEO["Log End: 12"]
     end
-    
-    CO["Consumer Offset<br/>(8)"] --> O8
-    LEO["Log End Offset<br/>(12)"] --> O12
-    
-    style O9 fill:#ffcccc
-    style O10 fill:#ffcccc
-    style O11 fill:#ffcccc
-    style O12 fill:#ffcccc
+    style lag fill:#ffcccc
 ```
 
 > **LAG = Log End Offset - Consumer Committed Offset = 4**
@@ -88,29 +62,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph sources["Sources"]
-        K["🖥️ Kafka Brokers"]
-        A["📦 Apps (Producer/Consumer)"]
-    end
-    
-    subgraph export["Export"]
-        JMX["🔌 JMX Exporter"]
-        MIC["📊 Micrometer/Actuator"]
-    end
-    
-    subgraph monitoring["Monitoring"]
-        PROM[("📈 Prometheus")]
-        GRAF["📊 Grafana Dashboards"]
-        ALERT["🚨 Alerting<br/>(Slack, PagerDuty)"]
-    end
-    
-    K --> JMX --> PROM
-    A --> MIC --> PROM
-    PROM --> GRAF --> ALERT
-    
+    K["🖥️ Kafka"] --> JMX["🔌 JMX"] --> PROM[("📈 Prometheus")] --> GRAF["📊 Grafana"] --> ALERT["🚨 Alert"]
     style PROM fill:#e8f5e9
-    style GRAF fill:#e3f2fd
-    style ALERT fill:#ffcccc
 ```
 
 ---
@@ -119,23 +72,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph svcA["Service A"]
-        SA["Span 1<br/>TraceID: abc"]
-    end
-    
-    subgraph kafka["Kafka"]
-        KT["Topic<br/>Headers: abc"]
-    end
-    
-    subgraph svcB["Service B"]
-        SB["Span 2<br/>TraceID: abc"]
-    end
-    
-    SA -->|"📨 Produce"| KT -->|"📥 Consume"| SB
-    
-    style SA fill:#e8f5e9
+    SA["Svc A"] -->|"📨 trace:abc"| KT["📦 Kafka"] -->|"📥 trace:abc"| SB["Svc B"]
     style KT fill:#fff3cd
-    style SB fill:#e3f2fd
 ```
 
 **Headers Kafka transportent le contexte de trace:**
