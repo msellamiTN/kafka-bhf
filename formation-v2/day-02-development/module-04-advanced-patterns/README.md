@@ -528,3 +528,13 @@ docker exec kafka kafka-topics --delete --topic orders.retry --bootstrap-server 
 - [Error Handling in Kafka](https://docs.confluent.io/platform/current/clients/consumer.html#error-handling)
 - [Consumer Rebalance Protocol](https://cwiki.apache.org/confluence/display/KAFKA/KIP-429%3A+Kafka+Consumer+Incremental+Rebalance+Protocol)
 - [Dead Letter Queue Pattern](https://www.enterpriseintegrationpatterns.com/patterns/messaging/DeadLetterChannel.html)
+
+---
+
+## 🛠️ Tutorials pas-à-pas
+
+| IDE | Tutorial | Description |
+|-----|----------|-------------|
+| **VS Code** | [TUTORIAL-DOTNET.md](./TUTORIAL-DOTNET.md) | DLT, Retry avec Polly, Batch |
+| **Visual Studio 2022** | [TUTORIAL-VS2022.md](./TUTORIAL-VS2022.md) | Projet complet avec Circuit Breaker, debugging |
+| **IntelliJ / VS Code** | [TUTORIAL-JAVA.md](./TUTORIAL-JAVA.md) | Spring Kafka avec RetryTemplate |

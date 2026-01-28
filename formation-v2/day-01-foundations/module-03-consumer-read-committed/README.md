@@ -877,6 +877,16 @@ docker compose -f infra/docker-compose.single-node.yml \
 
 ---
 
+## 🛠️ Tutorials pas-à-pas
+
+| IDE | Tutorial | Description |
+|-----|----------|-------------|
+| **VS Code** | [TUTORIAL-DOTNET.md](./TUTORIAL-DOTNET.md) | Consumer read_committed avec Confluent.Kafka |
+| **Visual Studio 2022** | [TUTORIAL-VS2022.md](./TUTORIAL-VS2022.md) | Projet complet avec transactions, debugging |
+| **IntelliJ / VS Code** | [TUTORIAL-JAVA.md](./TUTORIAL-JAVA.md) | Spring Boot transactionnel |
+
+---
+
 ## ➡️ Formation terminée !
 
 Félicitations ! Vous avez terminé les 3 modules fondamentaux de la formation Kafka :

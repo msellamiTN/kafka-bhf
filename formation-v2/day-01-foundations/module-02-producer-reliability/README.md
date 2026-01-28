@@ -1088,6 +1088,16 @@ docker compose -f day-01-foundations/module-02-producer-reliability/docker-compo
 
 ---
 
+## 🛠️ Tutorials pas-à-pas
+
+| IDE | Tutorial | Description |
+|-----|----------|-------------|
+| **VS Code** | [TUTORIAL-DOTNET.md](./TUTORIAL-DOTNET.md) | Minimal API avec Confluent.Kafka |
+| **Visual Studio 2022** | [TUTORIAL-VS2022.md](./TUTORIAL-VS2022.md) | Projet complet avec debugging, tests, Swagger |
+| **IntelliJ / VS Code** | [TUTORIAL-JAVA.md](./TUTORIAL-JAVA.md) | Spring Boot avec kafka-clients |
+
+---
+
 ## ➡️ Module suivant
 
 Une fois ce module terminé, passez au :

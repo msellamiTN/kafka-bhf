@@ -1,0 +1,14 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\formation-v2",
+    "\\formation-v2\\day-01-foundations",
+    "\\formation-v2\\day-01-foundations\\module-02-producer-reliability",
+    "\\formation-v2\\day-01-foundations\\module-02-producer-reliability\\dotnet",
+    "\\formation-v2\\day-01-foundations\\module-02-producer-reliability\\dotnet\\bin",
+    "\\formation-v2\\day-01-foundations\\module-02-producer-reliability\\dotnet\\bin\\Release",
+    "\\formation-v2\\day-01-foundations\\module-02-producer-reliability\\scripts"
+  ],
+  "SelectedNode": "\\formation-v2\\day-01-foundations\\module-02-producer-reliability\\scripts\\validate.sh",
+  "PreviewInSolutionExplorer": false
+}
