@@ -554,30 +554,142 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 ---
 
-## 🚀 Étape 8 : Exécution
+## � Étape 8 : Docker Compose - Build et Déploiement
 
-### 8.1 Démarrer Kafka
+### 8.1 Architecture Docker
 
-```powershell
-docker-compose up -d kafka zookeeper
+```mermaid
+flowchart TB
+    subgraph "Docker Network: bhf-kafka-network"
+        K["📦 Kafka<br/>:29092"]
+        UI["🖥️ Kafka UI<br/>:8080"]
+        JAVA["☕ Java API<br/>:18080"]
+        DOTNET["🔷 .NET API<br/>:18081"]
+        TOXI["🧪 Toxiproxy<br/>:8474"]
+    end
+    
+    JAVA --> K
+    DOTNET --> K
+    UI --> K
+    TOXI --> K
 ```
 
-### 8.2 Créer le topic
+### 8.2 Démarrer l'infrastructure Kafka
 
 ```powershell
-docker exec -it kafka kafka-topics --create \
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+
+# Vérifier que Kafka est healthy
+docker-compose -f docker-compose.single-node.yml ps
+```
+
+### 8.3 Créer le topic
+
+```powershell
+docker exec -it kafka kafka-topics.sh --create \
   --topic bhf-transactions \
   --partitions 3 \
   --bootstrap-server localhost:9092
 ```
 
-### 8.3 Lancer l'application
+### 8.4 Build et démarrer les APIs du module
 
 ```powershell
+# Depuis le répertoire du module
+cd ../day-01-foundations/module-02-producer-reliability
+
+# Build et démarrer les APIs Java + .NET + Toxiproxy
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
+```
+
+### 8.5 docker-compose.module.yml (référence)
+
+```yaml
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"
+      - "29093:29093"
+    networks:
+      - bhf-kafka-network
+
+  java-api:
+    build:
+      context: ./java
+    container_name: m02-java-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_REQUEST_TIMEOUT_MS: 30000
+      KAFKA_DELIVERY_TIMEOUT_MS: 120000
+      KAFKA_RETRIES: 3
+    ports:
+      - "18080:8080"
+    networks:
+      - bhf-kafka-network
+
+  dotnet-api:
+    build:
+      context: ./dotnet
+    container_name: m02-dotnet-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+    ports:
+      - "18081:8080"
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    external: true
+```
+
+### 8.6 Tester les APIs
+
+```powershell
+# Java API (port 18080)
+curl -X POST "http://localhost:18080/api/v1/send?mode=idempotent&eventId=TEST-JAVA-1&sendMode=sync"
+
+# .NET API (port 18081)
+curl -X POST "http://localhost:18081/api/v1/send?mode=idempotent&eventId=TEST-DOTNET-1&sendMode=sync"
+```
+
+### 8.7 Consulter Kafka UI
+
+Ouvrir http://localhost:8080 pour visualiser les messages dans le topic `bhf-transactions`.
+
+### 8.8 Arrêter les services
+
+```powershell
+# Arrêter les APIs du module
+docker-compose -f docker-compose.module.yml down
+
+# Arrêter Kafka (depuis infra/)
+cd ../infra
+docker-compose -f docker-compose.single-node.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+### Lancer l'application Java directement
+
+```powershell
+# S'assurer que Kafka tourne sur localhost:9092
 mvn spring-boot:run
 ```
 
-### 8.4 Tester les différents modes
+### Tester localement
 
 ```powershell
 # Mode plain (synchrone)

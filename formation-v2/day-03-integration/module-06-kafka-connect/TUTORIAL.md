@@ -316,19 +316,32 @@ DELETE {{connectUrl}}/connectors/file-source-connector
 
 ---
 
-## 🚀 Étape 5 : Exécution
+## � Étape 5 : Docker Compose - Build et Déploiement
 
-### 5.1 Démarrer l'infrastructure
+### 5.1 Démarrer l'infrastructure Kafka (depuis infra/)
 
 ```powershell
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+```
+
+### 5.2 Démarrer Kafka Connect
+
+```powershell
+# Depuis le répertoire du module
+cd ../day-03-integration/module-06-kafka-connect
+
 # Créer les dossiers de données
 mkdir -p data/input data/output
 
-# Démarrer les services
-docker-compose up -d
+# Démarrer Connect avec le docker-compose du module
+docker-compose -f docker-compose.module.yml up -d --build
 
 # Vérifier les logs
-docker-compose logs -f connect
+docker-compose -f docker-compose.module.yml logs -f connect
 ```
 
 ### 5.2 Attendre que Connect soit prêt

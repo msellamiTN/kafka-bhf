@@ -998,29 +998,35 @@ GET {{baseUrl}}/stores/sales-by-product-store/LAPTOP-001
 
 ---
 
-## 🚀 Étape 12 : Exécution
+## � Étape 12 : Docker Compose - Build et Déploiement
 
-### 12.1 Démarrer Kafka et créer les topics
+### 12.1 Démarrer l'infrastructure Kafka
 
 ```powershell
-# Démarrer Kafka
-docker-compose up -d kafka zookeeper
+# Depuis la racine formation-v2/
+cd infra
 
-# Créer les topics requis
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+```
+
+### 12.2 Créer les topics requis
+
+```powershell
 docker exec -it kafka bash -c "
-kafka-topics --create --topic sales-events --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
-kafka-topics --create --topic products --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092 --config cleanup.policy=compact
-kafka-topics --create --topic large-sales --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
-kafka-topics --create --topic sales-by-product --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
-kafka-topics --create --topic sales-per-minute --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
-kafka-topics --create --topic enriched-sales --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092
+kafka-topics.sh --create --topic sales-events --partitions 3 --bootstrap-server localhost:9092
+kafka-topics.sh --create --topic products --partitions 3 --bootstrap-server localhost:9092 --config cleanup.policy=compact
+kafka-topics.sh --create --topic large-sales --partitions 3 --bootstrap-server localhost:9092
+kafka-topics.sh --create --topic sales-by-product --partitions 3 --bootstrap-server localhost:9092
+kafka-topics.sh --create --topic sales-per-minute --partitions 3 --bootstrap-server localhost:9092
+kafka-topics.sh --create --topic enriched-sales --partitions 3 --bootstrap-server localhost:9092
 "
 ```
 
-### 12.2 Ajouter des produits (pour le join)
+### 12.3 Ajouter des produits (pour le join)
 
 ```powershell
-docker exec -it kafka kafka-console-producer \
+docker exec -it kafka kafka-console-producer.sh \
   --topic products \
   --bootstrap-server localhost:9092 \
   --property "parse.key=true" \
@@ -1032,26 +1038,89 @@ MOUSE-001:{"name":"Logitech MX","category":"Accessories"}
 # Ctrl+C
 ```
 
-### 12.3 Lancer l'application
+### 12.4 Build et démarrer l'application Streams
 
 ```powershell
-mvn spring-boot:run
+# Depuis le répertoire du module
+cd ../day-02-development/module-05-kafka-streams
+
+# Build et démarrer l'application Streams
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier le container
+docker-compose -f docker-compose.module.yml ps
 ```
 
-### 12.4 Observer les résultats
+### 12.5 docker-compose.module.yml (référence)
+
+```yaml
+services:
+  streams-app:
+    build:
+      context: ./java
+    container_name: m05-streams-app
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      APPLICATION_ID: sales-streams-app
+      INPUT_TOPIC: sales-events
+      OUTPUT_TOPIC: sales-by-product
+      PRODUCTS_TOPIC: products
+    ports:
+      - "18084:8080"
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    external: true
+```
+
+### 12.6 Tester l'application (port 18084)
+
+```powershell
+# Health check
+curl http://localhost:18084/health
+
+# Envoyer une vente via l'API
+curl -X POST http://localhost:18084/api/v1/sales \
+  -H "Content-Type: application/json" \
+  -d '{"productId":"LAPTOP-001","amount":1500.00}'
+
+# Interroger le State Store
+curl http://localhost:18084/api/v1/stores/sales-by-product-store/LAPTOP-001
+```
+
+### 12.7 Observer les résultats
 
 ```powershell
 # Voir les ventes enrichies
-docker exec -it kafka kafka-console-consumer \
+docker exec -it kafka kafka-console-consumer.sh \
   --topic enriched-sales \
   --bootstrap-server localhost:9092 \
   --from-beginning
 
-# Voir les grosses ventes
-docker exec -it kafka kafka-console-consumer \
+# Voir les grosses ventes (>100€)
+docker exec -it kafka kafka-console-consumer.sh \
   --topic large-sales \
   --bootstrap-server localhost:9092 \
   --from-beginning
+
+# Consulter Kafka UI : http://localhost:8080
+```
+
+### 12.8 Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+```powershell
+# S'assurer que Kafka tourne sur localhost:9092
+mvn spring-boot:run
 ```
 
 ---

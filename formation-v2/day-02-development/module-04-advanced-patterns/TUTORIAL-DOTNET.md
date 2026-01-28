@@ -466,59 +466,87 @@ GET {{baseUrl}}/api/v1/partitions
 
 ---
 
-## 🚀 Étape 6 : Exécution
+## � Étape 6 : Docker Compose - Build et Déploiement
 
-### 6.1 Démarrer Kafka
+### 6.1 Démarrer l'infrastructure Kafka
 
 ```powershell
-# Depuis le dossier racine kafka-bhf
-docker-compose up -d kafka zookeeper
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
 ```
 
-### 6.2 Créer le topic (si nécessaire)
+### 6.2 Créer le topic
 
 ```powershell
-docker exec -it kafka kafka-topics --create \
+docker exec -it kafka kafka-topics.sh --create \
   --topic orders \
   --partitions 6 \
-  --replication-factor 1 \
   --bootstrap-server localhost:9092
 ```
 
-### 6.3 Option A : Exécution locale
+### 6.3 Build et démarrer les APIs du module
 
 ```powershell
-dotnet run
+# Depuis le répertoire du module
+cd ../day-02-development/module-04-advanced-patterns
+
+# Build et démarrer les APIs Java + .NET
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
 ```
 
-### 6.4 Option B : Exécution Docker
+### 6.4 Tester le .NET Consumer (port 18083)
 
 ```powershell
-# Build
-docker build -t module04-dotnet-consumer .
+# Health check
+curl http://localhost:18083/health
 
-# Run
-docker run -p 8080:8080 \
-  -e KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 \
-  module04-dotnet-consumer
+# Vérifier les stats
+curl http://localhost:18083/api/v1/stats
+
+# Vérifier les partitions assignées
+curl http://localhost:18083/api/v1/partitions
 ```
 
-### 6.5 Tester le consumer
+### 6.5 Produire des messages de test
 
 ```powershell
-# Produire des messages de test
-docker exec -it kafka kafka-console-producer \
+# Via Java API (port 18082)
+curl -X POST http://localhost:18082/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{"orderId":"ORD-001","amount":99.99,"status":"NEW"}'
+
+# Ou via console producer
+docker exec -it kafka kafka-console-producer.sh \
   --topic orders \
   --bootstrap-server localhost:9092 \
   --property "parse.key=true" \
   --property "key.separator=:"
 
-# Taper des messages (format key:value)
-ORD-001:{"amount":99.99}
-ORD-002:{"amount":50.00}
+# Taper : ORD-002:{"amount":50.00}
 # Ctrl+C pour quitter
+```
 
-# Vérifier les stats du consumer
+### 6.6 Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+```powershell
+# S'assurer que Kafka tourne sur localhost:9092
+dotnet run
+
+# Vérifier les stats
 curl http://localhost:8080/api/v1/stats
 ```
 

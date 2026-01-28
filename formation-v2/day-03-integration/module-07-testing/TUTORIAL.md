@@ -770,7 +770,31 @@ start target/surefire-reports/index.html
 
 ---
 
-## 📊 Concepts de test Kafka
+## � Note : Docker Compose pour tests E2E
+
+Pour les tests end-to-end nécessitant une infrastructure Kafka complète :
+
+```powershell
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka
+docker-compose -f docker-compose.single-node.yml up -d
+
+# Lancer les tests d'intégration
+cd ../day-03-integration/module-07-testing
+mvn test -Dtest="**/integration/*"
+
+# Arrêter après les tests
+cd ../infra
+docker-compose -f docker-compose.single-node.yml down
+```
+
+> **Note :** Les tests Testcontainers démarrent automatiquement leur propre Kafka, aucune infrastructure externe n'est requise.
+
+---
+
+## �📊 Concepts de test Kafka
 
 ### Pyramide des tests
 

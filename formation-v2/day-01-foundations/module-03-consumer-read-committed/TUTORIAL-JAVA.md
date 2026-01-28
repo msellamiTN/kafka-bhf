@@ -513,30 +513,124 @@ GET {{baseUrl}}/metrics
 
 ---
 
-## 🚀 Exécution et validation
+## � Docker Compose - Build et Déploiement
 
-### 1. Démarrer Kafka
+### Architecture Docker
 
-```powershell
-docker-compose up -d kafka zookeeper
+```mermaid
+flowchart TB
+    subgraph "Docker Network: bhf-kafka-network"
+        K["📦 Kafka<br/>:29092"]
+        UI["🖥️ Kafka UI<br/>:8080"]
+        JAVA["☕ Java API<br/>:18090"]
+        DOTNET["🔷 .NET API<br/>:18091"]
+    end
+    
+    JAVA -->|produce/consume| K
+    DOTNET -->|consume| K
+    UI --> K
 ```
 
-### 2. Créer le topic
+### Démarrer l'infrastructure Kafka
 
 ```powershell
-docker exec -it kafka kafka-topics --create \
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+```
+
+### Créer le topic
+
+```powershell
+docker exec -it kafka kafka-topics.sh --create \
   --topic bhf-read-committed-demo \
   --partitions 3 \
   --bootstrap-server localhost:9092
 ```
 
-### 3. Lancer l'application
+### Build et démarrer les APIs du module
+
+```powershell
+# Depuis le répertoire du module
+cd ../day-01-foundations/module-03-consumer-read-committed
+
+# Build et démarrer les APIs Java + .NET
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
+```
+
+### docker-compose.module.yml (référence)
+
+```yaml
+services:
+  java-api:
+    build:
+      context: ./java
+    container_name: m03-java-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: bhf-read-committed-demo
+      KAFKA_GROUP_ID: m03-java-consumer
+    ports:
+      - "18090:8080"
+    networks:
+      - bhf-kafka-network
+
+  dotnet-api:
+    build:
+      context: ./dotnet
+    container_name: m03-dotnet-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: bhf-read-committed-demo
+      KAFKA_GROUP_ID: m03-dotnet-consumer
+    ports:
+      - "18091:8080"
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    external: true
+```
+
+### Tester les APIs
+
+```powershell
+# Java API - Envoyer un COMMIT (port 18090)
+curl -X POST "http://localhost:18090/api/v1/tx/commit?txId=TX-COMMIT-001"
+
+# Java API - Envoyer un ABORT
+curl -X POST "http://localhost:18090/api/v1/tx/abort?txId=TX-ABORT-001"
+
+# Java API - Vérifier les métriques
+curl http://localhost:18090/api/v1/metrics
+
+# .NET API - Vérifier les métriques (port 18091)
+curl http://localhost:18091/api/v1/metrics
+```
+
+### Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+### Lancer l'application
 
 ```powershell
 mvn spring-boot:run
 ```
 
-### 4. Tester le comportement
+### Tester le comportement
 
 ```powershell
 # Envoyer un COMMIT

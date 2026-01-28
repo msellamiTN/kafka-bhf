@@ -340,13 +340,72 @@ GET {{baseUrl}}/status?requestId={requestId}
 
 ---
 
-## 🚀 Étape 5 : Exécution
+## � Étape 5 : Docker Compose - Build et Déploiement
+
+### 5.1 Architecture Docker
+
+```mermaid
+flowchart TB
+    subgraph "Docker Network: bhf-kafka-network"
+        K["📦 Kafka<br/>:29092"]
+        UI["🖥️ Kafka UI<br/>:8080"]
+        JAVA["☕ Java API<br/>:18080"]
+        DOTNET["🔷 .NET API<br/>:18081"]
+    end
+    
+    JAVA --> K
+    DOTNET --> K
+    UI --> K
+```
+
+### 5.2 Démarrer l'infrastructure Kafka
 
 ```powershell
-# Démarrer Kafka
-docker-compose up -d kafka zookeeper
+# Depuis la racine formation-v2/
+cd infra
 
-# Lancer l'application
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+
+# Vérifier que Kafka est healthy
+docker-compose -f docker-compose.single-node.yml ps
+```
+
+### 5.3 Build et démarrer les APIs du module
+
+```powershell
+# Depuis le répertoire du module
+cd ../day-01-foundations/module-02-producer-reliability
+
+# Build et démarrer les APIs Java + .NET
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
+```
+
+### 5.4 Tester l'API .NET (port 18081)
+
+```powershell
+# Health check
+curl http://localhost:18081/health
+
+# Envoi idempotent
+curl -X POST "http://localhost:18081/api/v1/send?mode=idempotent&eventId=DOTNET-001&sendMode=sync"
+```
+
+### 5.5 Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+```powershell
+# S'assurer que Kafka tourne sur localhost:9092
 dotnet run
 
 # Tester

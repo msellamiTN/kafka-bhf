@@ -263,7 +263,45 @@ GET http://localhost:5000/api/v1/metrics
 
 ---
 
-## 🚀 Exécution
+## � Docker Compose - Build et Déploiement
+
+### Démarrer l'infrastructure Kafka
+
+```powershell
+# Depuis la racine formation-v2/
+cd infra
+docker-compose -f docker-compose.single-node.yml up -d
+```
+
+### Build et démarrer les APIs du module
+
+```powershell
+# Depuis le répertoire du module
+cd ../day-01-foundations/module-03-consumer-read-committed
+
+# Build et démarrer les APIs Java + .NET
+docker-compose -f docker-compose.module.yml up -d --build
+```
+
+### Tester l'API .NET (port 18091)
+
+```powershell
+# Health check
+curl http://localhost:18091/health
+
+# Vérifier les métriques (seuls les COMMIT apparaissent)
+curl http://localhost:18091/api/v1/metrics
+```
+
+### Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
 
 ```powershell
 # Lancer le consumer
@@ -275,6 +313,8 @@ dotnet run
 # Vérifier les métriques
 curl http://localhost:5000/api/v1/metrics
 ```
+
+---
 
 ### Résultat attendu
 

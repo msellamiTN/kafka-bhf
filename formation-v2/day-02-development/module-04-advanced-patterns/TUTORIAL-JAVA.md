@@ -1123,35 +1123,134 @@ GET {{baseUrl}}/dlt/count
 
 ---
 
-## 🚀 Étape 12 : Exécution
+## � Étape 12 : Docker Compose - Build et Déploiement
 
-### 12.1 Démarrer Kafka (Docker Compose)
+### 12.1 Architecture Docker
 
-```powershell
-# Depuis le dossier racine du projet kafka-bhf
-docker-compose up -d kafka zookeeper
+```mermaid
+flowchart TB
+    subgraph "Docker Network: bhf-kafka-network"
+        K["📦 Kafka<br/>:29092"]
+        UI["🖥️ Kafka UI<br/>:8080"]
+        JAVA["☕ Java API<br/>:18082"]
+        DOTNET["🔷 .NET Consumer<br/>:18083"]
+    end
+    
+    JAVA -->|produce| K
+    K -->|consume| DOTNET
+    UI --> K
 ```
 
-### 12.2 Option A : Exécution locale (Maven)
+### 12.2 Démarrer l'infrastructure Kafka
 
 ```powershell
-# Depuis le dossier module04-java-api
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
+
+# Vérifier que Kafka est healthy
+docker-compose -f docker-compose.single-node.yml ps
+```
+
+### 12.3 Créer les topics
+
+```powershell
+docker exec -it kafka kafka-topics.sh --create --topic orders --partitions 3 --bootstrap-server localhost:9092
+docker exec -it kafka kafka-topics.sh --create --topic orders.DLT --partitions 1 --bootstrap-server localhost:9092
+docker exec -it kafka kafka-topics.sh --create --topic orders.retry --partitions 1 --bootstrap-server localhost:9092
+```
+
+### 12.4 Build et démarrer les APIs du module
+
+```powershell
+# Depuis le répertoire du module
+cd ../day-02-development/module-04-advanced-patterns
+
+# Build et démarrer les APIs Java + .NET
+docker-compose -f docker-compose.module.yml up -d --build
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
+```
+
+### 12.5 docker-compose.module.yml (référence)
+
+```yaml
+services:
+  java-api:
+    build:
+      context: ./java
+    container_name: m04-java-api
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: orders
+      KAFKA_DLT_TOPIC: orders.DLT
+      KAFKA_RETRY_TOPIC: orders.retry
+      MAX_RETRIES: 3
+    ports:
+      - "18082:8080"
+    networks:
+      - bhf-kafka-network
+
+  dotnet-consumer:
+    build:
+      context: ./dotnet
+    container_name: m04-dotnet-consumer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: orders
+      KAFKA_GROUP_ID: orders-consumer-group
+    ports:
+      - "18083:8080"
+    networks:
+      - bhf-kafka-network
+
+networks:
+  bhf-kafka-network:
+    external: true
+```
+
+### 12.6 Tester les APIs
+
+```powershell
+# Java API (port 18082) - Health check
+curl http://localhost:18082/health
+
+# Java API - Créer une commande
+curl -X POST http://localhost:18082/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{"orderId":"TEST-001","amount":99.99,"status":"NEW"}'
+
+# Java API - Voir les stats
+curl http://localhost:18082/api/v1/stats
+
+# .NET Consumer (port 18083) - Health check
+curl http://localhost:18083/health
+
+# Consulter Kafka UI
+# Ouvrir http://localhost:8080
+```
+
+### 12.7 Arrêter les services
+
+```powershell
+docker-compose -f docker-compose.module.yml down
+```
+
+---
+
+## 🖥️ Alternative : Exécution locale (sans Docker)
+
+### Lancer l'application
+
+```powershell
+# S'assurer que Kafka tourne sur localhost:9092
 mvn spring-boot:run
 ```
 
-### 12.3 Option B : Exécution Docker
-
-```powershell
-# Build de l'image
-docker build -t module04-java-api .
-
-# Exécution
-docker run -p 8080:8080 \
-  -e KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 \
-  module04-java-api
-```
-
-### 12.4 Vérifier le fonctionnement
+### Tester localement
 
 ```powershell
 # Health check

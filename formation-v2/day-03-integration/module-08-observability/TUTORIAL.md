@@ -586,26 +586,54 @@ mkdir -p jmx-exporter
 Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.19.0/jmx_prometheus_javaagent-0.19.0.jar" -OutFile "jmx-exporter/jmx_prometheus_javaagent.jar"
 ```
 
-### 6.2 Démarrer les services
+### 6.2 Démarrer l'infrastructure Kafka (depuis infra/)
 
 ```powershell
-docker-compose up -d
+# Depuis la racine formation-v2/
+cd infra
+
+# Démarrer Kafka single-node + Kafka UI
+docker-compose -f docker-compose.single-node.yml up -d
 ```
 
-### 6.3 Vérifier les services
+### 6.3 Démarrer la stack d'observabilité
 
 ```powershell
-# Kafka
-curl http://localhost:9092
+# Depuis le répertoire du module
+cd ../day-03-integration/module-08-observability
 
-# JMX Exporter metrics
+# Démarrer Prometheus, Grafana, Exporters
+docker-compose -f docker-compose.module.yml up -d
+
+# Vérifier les containers
+docker-compose -f docker-compose.module.yml ps
+```
+
+### 6.4 Vérifier les services
+
+```powershell
+# JMX Exporter metrics (port 9404)
 curl http://localhost:9404/metrics
 
-# Prometheus
+# Prometheus (port 9090)
 curl http://localhost:9090/api/v1/targets
 
-# Kafka Exporter
+# Kafka Exporter (port 9308)
 curl http://localhost:9308/metrics
+
+# Grafana (port 3000) - Login: admin/admin
+# Ouvrir http://localhost:3000
+```
+
+### 6.5 Arrêter les services
+
+```powershell
+# Arrêter la stack observabilité
+docker-compose -f docker-compose.module.yml down
+
+# Arrêter Kafka
+cd ../infra
+docker-compose -f docker-compose.single-node.yml down
 ```
 
 ---
