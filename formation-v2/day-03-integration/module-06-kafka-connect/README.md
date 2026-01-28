@@ -117,6 +117,214 @@ flowchart LR
 
 ---
 
+### 5. Change Data Capture (CDC) avec Debezium
+
+Le **CDC** permet de capturer les changements de données en temps réel depuis une base de données vers Kafka.
+
+```mermaid
+flowchart LR
+    subgraph DB["🗄️ Base de données"]
+        T["Table Orders"]
+        WAL["📝 WAL/Transaction Log"]
+    end
+    
+    subgraph Debezium["🔌 Debezium"]
+        CDC["CDC Connector"]
+    end
+    
+    subgraph Kafka["📦 Kafka"]
+        TP["orders.public.orders"]
+    end
+    
+    T -->|"INSERT/UPDATE/DELETE"| WAL
+    WAL -->|"Stream changes"| CDC
+    CDC -->|"Produce"| TP
+    
+    style WAL fill:#fff3cd
+    style CDC fill:#e8f5e9
+```
+
+#### Pourquoi CDC vs Polling ?
+
+| Approche | Avantages | Inconvénients |
+|----------|-----------|---------------|
+| **Polling (JDBC)** | Simple à configurer | Latence, charge DB, DELETE non capturés |
+| **CDC (Debezium)** | Temps réel, tous les changements, faible impact | Configuration WAL requise |
+
+#### Structure d'un événement CDC
+
+```json
+{
+  "before": { "id": 1, "status": "pending" },
+  "after": { "id": 1, "status": "shipped" },
+  "source": {
+    "db": "orders_db",
+    "table": "orders",
+    "ts_ms": 1706450400000
+  },
+  "op": "u"
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `before` | État avant modification (null pour INSERT) |
+| `after` | État après modification (null pour DELETE) |
+| `op` | Opération: `c`=create, `u`=update, `d`=delete, `r`=read |
+
+---
+
+### 6. CDC avec PostgreSQL
+
+PostgreSQL utilise le **WAL (Write-Ahead Log)** avec le plugin `pgoutput` pour le CDC.
+
+```mermaid
+flowchart TB
+    subgraph PostgreSQL
+        APP["🖥️ Application .NET"] -->|"Entity Framework"| PG["🐘 PostgreSQL"]
+        PG -->|"pgoutput"| WAL["📝 WAL"]
+    end
+    
+    WAL -->|"Logical Replication"| DEB["🔌 Debezium"]
+    DEB -->|"JSON"| K["📦 Kafka"]
+    
+    style PG fill:#336791,color:#fff
+    style DEB fill:#e8f5e9
+```
+
+#### Configuration PostgreSQL requise
+
+```sql
+-- Activer la réplication logique (postgresql.conf)
+-- wal_level = logical
+-- max_replication_slots = 4
+-- max_wal_senders = 4
+
+-- Créer un slot de réplication
+SELECT * FROM pg_create_logical_replication_slot('debezium', 'pgoutput');
+
+-- Vérifier les slots
+SELECT slot_name, plugin, slot_type, active FROM pg_replication_slots;
+```
+
+#### Configuration Debezium PostgreSQL
+
+```json
+{
+  "name": "postgres-cdc-source",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "postgres",
+    "database.dbname": "orders_db",
+    "database.server.name": "orders",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium",
+    "publication.name": "dbz_publication",
+    "table.include.list": "public.orders,public.customers",
+    "topic.prefix": "cdc",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+    "schema.history.internal.kafka.topic": "schema-changes.orders"
+  }
+}
+```
+
+---
+
+### 7. CDC avec SQL Server
+
+SQL Server utilise le **Change Tracking** ou **CDC natif** pour capturer les modifications.
+
+```mermaid
+flowchart TB
+    subgraph SQLServer["🔷 SQL Server"]
+        APP["🖥️ Application .NET"] -->|"Entity Framework"| SQL["SQL Server"]
+        SQL -->|"CDC Tables"| CT["📝 cdc.*_CT"]
+    end
+    
+    CT -->|"Poll changes"| DEB["🔌 Debezium"]
+    DEB -->|"JSON"| K["📦 Kafka"]
+    
+    style SQL fill:#cc2927,color:#fff
+    style DEB fill:#e8f5e9
+```
+
+#### Activation CDC sur SQL Server
+
+```sql
+-- Activer CDC sur la base de données
+USE orders_db;
+EXEC sys.sp_cdc_enable_db;
+
+-- Activer CDC sur une table
+EXEC sys.sp_cdc_enable_table
+  @source_schema = N'dbo',
+  @source_name = N'Orders',
+  @role_name = NULL,
+  @supports_net_changes = 1;
+
+-- Vérifier les tables CDC
+SELECT name, is_tracked_by_cdc FROM sys.tables WHERE is_tracked_by_cdc = 1;
+
+-- Vérifier le statut CDC
+EXEC sys.sp_cdc_help_change_data_capture;
+```
+
+#### Configuration Debezium SQL Server
+
+```json
+{
+  "name": "sqlserver-cdc-source",
+  "config": {
+    "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+    "database.hostname": "sqlserver",
+    "database.port": "1433",
+    "database.user": "sa",
+    "database.password": "YourStrong!Passw0rd",
+    "database.names": "orders_db",
+    "topic.prefix": "sqlserver",
+    "table.include.list": "dbo.Orders,dbo.Customers",
+    "database.encrypt": "false",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+    "schema.history.internal.kafka.topic": "schema-changes.sqlserver"
+  }
+}
+```
+
+---
+
+### 8. Comparaison PostgreSQL vs SQL Server CDC
+
+| Critère | PostgreSQL | SQL Server |
+|---------|------------|------------|
+| **Mécanisme** | Logical Replication (WAL) | CDC Tables (polling) |
+| **Latence** | ~100ms (temps réel) | ~1-5s (polling interval) |
+| **Impact performance** | Faible | Modéré |
+| **Configuration** | `wal_level=logical` | `sp_cdc_enable_db` |
+| **DELETE** | Capturé | Capturé |
+| **Schema changes** | Automatique | Reconfiguration requise |
+
+#### Bonnes pratiques CDC
+
+> **⚠️ Production** : Toujours tester le CDC en staging avant production
+
+```text
+✅ DO:
+  - Monitorer le lag des slots de réplication
+  - Configurer la rétention des slots
+  - Utiliser des topics séparés par table
+  - Activer la compression des topics CDC
+
+❌ DON'T:
+  - Activer CDC sur toutes les tables
+  - Ignorer le monitoring des slots
+  - Oublier de nettoyer les anciens slots
+```
+
+---
+
 ## 🔌 Ports et Services
 
 | Service | Port | Description |

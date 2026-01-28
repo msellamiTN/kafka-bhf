@@ -341,7 +341,17 @@ cd ../day-01-foundations/module-02-producer-reliability
 
 ---
 
-## 📞 Support
+## � Guides spécialisés
+
+| Guide | Description | Audience |
+|-------|-------------|----------|
+| [🔄 Migration MQ → Kafka](./MIGRATION-MQ-KAFKA.md) | Migrer d'un MQ traditionnel vers Kafka | Équipes migrant de monolithique vers microservices |
+| [☸️ Déploiement OpenShift](./DEPLOYMENT-OPENSHIFT.md) | Déployer Kafka et apps .NET sur OpenShift | DevOps / Platform teams |
+| [🔷 Patterns .NET + EF](./PATTERNS-DOTNET-EF.md) | Intégration Entity Framework + Kafka | Développeurs .NET Core |
+
+---
+
+## �📞 Support
 
 | Contact | Rôle |
 |---------|------|
