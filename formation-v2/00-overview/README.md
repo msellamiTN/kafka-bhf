@@ -102,7 +102,7 @@ flowchart LR
 
 ## 📚 Détail des modules
 
-### Day 1 - Fondamentaux Kafka
+### [Day 1 - Fondamentaux Kafka](../day-01-foundations/README.md)
 
 | Module | Titre | Durée | Technologies |
 |--------|-------|-------|--------------|
@@ -119,7 +119,7 @@ flowchart LR
 - Transactions Kafka et isolation level
 - Callbacks et gestion asynchrone
 
-### Day 2 - Développement avancé
+### [Day 2 - Développement avancé](../day-02-development/README.md)
 
 | Module | Titre | Durée | Technologies |
 |--------|-------|-------|--------------|
@@ -133,7 +133,7 @@ flowchart LR
 - Windowing et agrégations
 - Interactive Queries
 
-### Day 3 - Intégration & Production
+### [Day 3 - Intégration & Production](../day-03-integration/README.md)
 
 | Module | Titre | Durée | Technologies |
 |--------|-------|-------|--------------|
