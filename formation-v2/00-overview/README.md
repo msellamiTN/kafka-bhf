@@ -51,17 +51,18 @@ gantt
     axisFormat %s
     
     section Day 1 - Fondamentaux
-    Module 02 - Producer Reliability    :m02, 0, 2
-    Module 03 - Consumer Transactions   :m03, 2, 4
+    Module 01 - Architecture Kafka      :m01, 0, 1
+    Module 02 - Producer Reliability    :m02, 1, 3
+    Module 03 - Consumer Transactions   :m03, 3, 5
     
     section Day 2 - Développement
-    Module 04 - Advanced Patterns       :m04, 4, 6
-    Module 05 - Kafka Streams           :m05, 6, 8
+    Module 04 - Advanced Patterns       :m04, 5, 7
+    Module 05 - Kafka Streams           :m05, 7, 9
     
     section Day 3 - Intégration
-    Module 06 - Kafka Connect           :m06, 8, 10
-    Module 07 - Testing                 :m07, 10, 11
-    Module 08 - Observability           :m08, 11, 12
+    Module 06 - Kafka Connect           :m06, 9, 11
+    Module 07 - Testing                 :m07, 11, 12
+    Module 08 - Observability           :m08, 12, 13
 ```
 
 ### Parcours d'apprentissage
@@ -69,6 +70,7 @@ gantt
 ```mermaid
 flowchart LR
     subgraph "📅 Day 1: Foundations"
+        M01["🏗️ M01<br/>Architecture<br/>Kafka"]
         M02["🔒 M02<br/>Producer<br/>Idempotence"]
         M03["📖 M03<br/>Consumer<br/>Read Committed"]
     end
@@ -84,8 +86,9 @@ flowchart LR
         M08["📊 M08<br/>Observability"]
     end
     
-    M02 --> M03 --> M04 --> M05 --> M06 --> M07 --> M08
+    M01 --> M02 --> M03 --> M04 --> M05 --> M06 --> M07 --> M08
     
+    style M01 fill:#e3f2fd
     style M02 fill:#e3f2fd
     style M03 fill:#e3f2fd
     style M04 fill:#fff3e0
@@ -103,10 +106,14 @@ flowchart LR
 
 | Module | Titre | Durée | Technologies |
 |--------|-------|-------|--------------|
+| **M01** | Architecture Kafka & KRaft | 30-45 min | Docker, Kafka CLI |
 | **M02** | Producer Reliability (Idempotence) | 60-90 min | Java, .NET, Toxiproxy |
 | **M03** | Consumer Read Committed | 60-90 min | Java, .NET |
 
 **Compétences acquises :**
+- Architecture cluster Kafka (Brokers, Topics, Partitions)
+- Mode KRaft vs ZooKeeper
+- Concepts Producer/Consumer et Offsets
 - Configuration `enable.idempotence=true`
 - Gestion des retries et timeouts
 - Transactions Kafka et isolation level
@@ -250,13 +257,16 @@ code --install-extension humao.rest-client
 
 ## 📂 Structure du repository
 
-```
+```text
 formation-v2/
 ├── 00-overview/              # Vue d'ensemble (ce document)
 ├── infra/                    # Infrastructure Docker partagée
 │   └── docker-compose.single-node.yml
 │
 ├── day-01-foundations/       # Jour 1 - Fondamentaux
+│   ├── module-01-cluster/    # Architecture Kafka & KRaft
+│   │   ├── README.md         # Théorie + Lab CLI
+│   │   └── scripts/
 │   ├── module-02-producer-reliability/
 │   │   ├── README.md         # Théorie
 │   │   ├── TUTORIAL-JAVA.md  # Lab Java pas-à-pas
