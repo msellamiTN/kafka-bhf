@@ -68,18 +68,133 @@ flowchart LR
 
 ---
 
-### 4. Tracing distribué
+### 4. Traçage distribué
+
+Le traçage distribué permet de suivre une requête à travers plusieurs services et topics Kafka.
 
 ```mermaid
 flowchart LR
-    SA["Svc A"] -->|"📨 trace:abc"| KT["📦 Kafka"] -->|"📥 trace:abc"| SB["Svc B"]
-    style KT fill:#fff3cd
+    subgraph Trace["🔗 Trace ID: abc-123"]
+        SA["🔵 Service A<br/>Span 1"] -->|"📨 order.created"| K1["📦 Kafka"]
+        K1 -->|"📥"| SB["🟢 Service B<br/>Span 2"]
+        SB -->|"📨 payment.requested"| K2["📦 Kafka"]
+        K2 -->|"📥"| SC["🟠 Service C<br/>Span 3"]
+    end
+    
+    style SA fill:#e3f2fd
+    style SB fill:#e8f5e9
+    style SC fill:#fff3e0
 ```
 
-**Headers Kafka transportent le contexte de trace:**
+#### Propagation du contexte
+
+Les **headers Kafka** transportent le contexte de trace selon le standard W3C Trace Context :
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Headers Kafka                                              │
+├─────────────────────────────────────────────────────────────┤
+│  traceparent: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b...│
+│  tracestate: vendor=value                                   │
+│  correlation-id: order-12345                                │
+│  causation-id: event-67890                                  │
+└─────────────────────────────────────────────────────────────┘
 ```
-traceparent: 00-abc123-def456-01
-tracestate: vendor=value
+
+| Header | Format | Description |
+|--------|--------|-------------|
+| **traceparent** | `version-traceid-spanid-flags` | Identifiant W3C standard |
+| **tracestate** | `vendor=value` | Métadonnées vendor-specific |
+| **correlation-id** | UUID | ID de corrélation métier |
+| **causation-id** | UUID | ID de l'événement parent |
+
+#### Corrélation des événements
+
+```mermaid
+flowchart TB
+    subgraph Correlation["📊 Corrélation des événements"]
+        E1["🛒 OrderCreated<br/>correlation: order-123<br/>causation: null"]
+        E2["💳 PaymentRequested<br/>correlation: order-123<br/>causation: order-created-1"]
+        E3["📦 ShipmentCreated<br/>correlation: order-123<br/>causation: payment-completed-2"]
+    end
+    
+    E1 -->|"cause"| E2 -->|"cause"| E3
+```
+
+#### Implémentation Java avec OpenTelemetry
+
+```java
+// Producer - Injection du contexte
+@Autowired
+private Tracer tracer;
+
+public void send(String topic, String key, String value) {
+    Span span = tracer.spanBuilder("kafka-produce")
+        .setSpanKind(SpanKind.PRODUCER)
+        .startSpan();
+    
+    try (Scope scope = span.makeCurrent()) {
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+        
+        // Injecter le contexte dans les headers
+        Context context = Context.current();
+        GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+            .inject(context, record.headers(), (headers, k, v) -> 
+                headers.add(k, v.getBytes()));
+        
+        producer.send(record);
+    } finally {
+        span.end();
+    }
+}
+```
+
+```java
+// Consumer - Extraction du contexte
+public void consume(ConsumerRecord<String, String> record) {
+    // Extraire le contexte des headers
+    Context extractedContext = GlobalOpenTelemetry.getPropagators()
+        .getTextMapPropagator()
+        .extract(Context.current(), record.headers(), 
+            (headers, key) -> {
+                Header h = headers.lastHeader(key);
+                return h != null ? new String(h.value()) : null;
+            });
+    
+    Span span = tracer.spanBuilder("kafka-consume")
+        .setSpanKind(SpanKind.CONSUMER)
+        .setParent(extractedContext)
+        .startSpan();
+    
+    try (Scope scope = span.makeCurrent()) {
+        // Traitement du message
+        processMessage(record);
+    } finally {
+        span.end();
+    }
+}
+```
+
+#### Visualisation dans Jaeger
+
+```mermaid
+gantt
+    title Trace Timeline - Order Processing
+    dateFormat X
+    axisFormat %s
+    
+    section Service A
+    OrderCreated (50ms)     :a1, 0, 50
+    
+    section Kafka
+    Produce (5ms)           :k1, 50, 55
+    Consume (5ms)           :k2, 55, 60
+    
+    section Service B
+    PaymentProcess (100ms)  :b1, 60, 160
+    
+    section Service C
+    ShipmentCreate (30ms)   :c1, 160, 190
 ```
 
 ---
