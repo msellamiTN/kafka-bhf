@@ -82,3 +82,26 @@ Traçage distribué
 Atelier pratique
  Visualisation du consumer lag.
  Mise en place de métriques via JMX.
+Population
+Confirmé Senior .Net Core
+Micro services  (1 ou plusieurs)
+Monlitiques vers micro services API
+Skilled 
+Sans aucune info sur Kafka
+Envionnement
+OpenShift
+C# .Net  CoreEntity FrameworkOpenShiftTroublesihts of logs
+Messaging (MQ)
+Concepts Event Based applications
+Micro services API/ Monolithiques vers Micro services.
+Cartographies architectures 
+Event Based applications
+Architectures Simples/
+Change Data Capture(concepts/Réalisation) Data Rentention
+Uses Cases
+IDE/ VS code/ Visual Studio 2022/ Github Copilot
+Postgress Kafka Connect/SQL Server
+ 
+
+
+
