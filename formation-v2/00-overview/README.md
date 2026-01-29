@@ -151,6 +151,10 @@ flowchart LR
 
 ## 🏗️ Architecture technique
 
+> 💡 **Deux modes de déploiement** : Cette formation supporte **Docker** (développement local) et **OKD/K3s** (environnement Kubernetes).
+
+### 🐳 Mode Docker (Développement local)
+
 ```mermaid
 flowchart TB
     subgraph "🖥️ Poste développeur"
@@ -184,6 +188,48 @@ flowchart TB
     GRAF --> PROM
 ```
 
+### ☸️ Mode OKD/K3s (Kubernetes)
+
+```mermaid
+flowchart TB
+    subgraph "🖥️ Poste développeur"
+        VS["VS Code"]
+        KC["kubectl"]
+    end
+    
+    subgraph "☸️ Cluster K3s/OKD"
+        subgraph "Namespace: strimzi"
+            SO["🔧 Strimzi Operator"]
+        end
+        
+        subgraph "Namespace: kafka"
+            KF["📦 Kafka Cluster<br/>bhf-kafka (3 brokers)"]
+            KT["📋 KafkaTopics CRs"]
+            UI2["🖥️ Kafka UI<br/>NodePort :30808"]
+        end
+        
+        subgraph "Namespace: apps"
+            JAVA2["☕ Java APIs"]
+            DOTNET2["🔷 .NET APIs"]
+        end
+        
+        subgraph "Namespace: monitoring"
+            PROM2["📊 Prometheus<br/>NodePort :30090"]
+            GRAF2["📈 Grafana<br/>NodePort :30030"]
+        end
+    end
+    
+    VS --> KC
+    KC --> SO
+    SO --> KF
+    KF --> KT
+    JAVA2 --> KF
+    DOTNET2 --> KF
+    UI2 --> KF
+    PROM2 --> KF
+    GRAF2 --> PROM2
+```
+
 ### Stack technologique
 
 ```mermaid
@@ -202,14 +248,23 @@ flowchart LR
     end
     
     subgraph "Infrastructure"
-        KF[Apache Kafka 3.x]
+        KF[Apache Kafka 4.x]
         KR[KRaft Mode]
         KC[Kafka Connect]
     end
     
-    subgraph "DevOps"
+    subgraph "DevOps - Docker"
         D[Docker]
         DC[Docker Compose]
+    end
+    
+    subgraph "DevOps - Kubernetes"
+        K3[K3s / OKD]
+        ST[Strimzi Operator]
+        HE[Helm]
+    end
+    
+    subgraph "Observability"
         P[Prometheus]
         G[Grafana]
     end
@@ -219,7 +274,7 @@ flowchart LR
 
 ## 💻 Prérequis techniques
 
-### Logiciels requis
+### Logiciels requis (Mode Docker)
 
 | Outil | Version | Installation |
 |-------|---------|--------------|
@@ -229,6 +284,18 @@ flowchart LR
 | **Maven** | 3.8+ | `winget install Apache.Maven` |
 | **.NET SDK** | 8.0+ | `winget install Microsoft.DotNet.SDK.8` |
 | **Git** | Latest | `winget install Git.Git` |
+
+### Logiciels requis (Mode OKD/K3s)
+
+| Outil | Version | Installation |
+|-------|---------|--------------|
+| **kubectl** | Latest | `curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl` |
+| **Helm** | 3.x+ | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
+| **K3s** | Latest | `curl -sfL https://get.k3s.io \| sh -` |
+| **Java JDK** | 17+ | `sudo apt install openjdk-17-jdk` |
+| **.NET SDK** | 8.0+ | Voir [docs.microsoft.com](https://docs.microsoft.com/dotnet/core/install/linux-ubuntu) |
+
+> 📘 Pour une installation complète K8s, voir **[Guide Installation OKD/K8s Ubuntu](./INSTALL-OKD-UBUNTU.md)**
 
 ### Extensions VS Code recommandées
 
@@ -292,35 +359,80 @@ formation-v2/
 
 ### 1. Cloner le repository
 
-```powershell
+```bash
 git clone https://github.com/msellamiTN/kafka-bhf.git
 cd kafka-bhf/formation-v2
 ```
 
-### 2. Démarrer l'infrastructure Kafka
+### 2. Choisir votre environnement
 
-```powershell
+<details>
+<summary>🐳 <b>Mode Docker (Windows/Mac/Linux)</b></summary>
+
+**Démarrer Kafka** :
+
+```bash
 cd infra
 docker-compose -f docker-compose.single-node.yml up -d
 ```
 
-### 3. Vérifier l'installation
+**Vérifier l'installation** :
 
-```powershell
+```bash
 # Kafka UI disponible sur http://localhost:8080
 curl http://localhost:8080
 ```
 
-### 4. Commencer le premier module
+</details>
 
-```powershell
-cd ../day-01-foundations/module-02-producer-reliability
-# Ouvrir TUTORIAL-JAVA.md ou TUTORIAL-DOTNET.md
+<details>
+<summary>☸️ <b>Mode OKD/K3s (Linux/Ubuntu)</b></summary>
+
+**Installer les prérequis** :
+
+```bash
+cd infra/Scripts
+sudo ./01-install-prerequisites.sh
+```
+
+**Installer K3s** :
+
+```bash
+sudo ./02-install-k3s.sh
+```
+
+**Installer Kafka avec Strimzi** :
+
+```bash
+sudo ./03-install-kafka.sh
+```
+
+**Vérifier l'installation** :
+
+```bash
+# Vérifier le cluster Kafka
+kubectl get kafka -n kafka
+kubectl get pods -n kafka
+
+# Kafka UI disponible sur http://<NODE_IP>:30808
+```
+
+> 📘 Guide complet : **[Installation OKD/K8s Ubuntu](./INSTALL-OKD-UBUNTU.md)**
+
+</details>
+
+### 3. Commencer le premier module
+
+```bash
+cd day-01-foundations/module-01-cluster
+# Suivre le README.md (supporte Docker ET K8s)
 ```
 
 ---
 
 ## 📊 Ports de référence
+
+### 🐳 Mode Docker
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -338,6 +450,16 @@ cd ../day-01-foundations/module-02-producer-reliability
 | Prometheus | 9090 | Metrics |
 | Grafana | 3000 | Dashboards |
 | JMX Exporter | 9404 | Kafka JMX Metrics |
+
+### ☸️ Mode OKD/K3s
+
+| Service | Port/NodePort | URL |
+|---------|---------------|-----|
+| Kafka Bootstrap | 9092 (ClusterIP) | `bhf-kafka-kafka-bootstrap.kafka.svc:9092` |
+| Kafka UI | 30808 | `http://<NODE_IP>:30808` |
+| Prometheus | 30090 | `http://<NODE_IP>:30090` |
+| Grafana | 30030 | `http://<NODE_IP>:30030` |
+| Local Registry | 5000 | `localhost:5000` |
 
 ---
 
