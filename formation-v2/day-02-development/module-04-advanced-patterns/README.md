@@ -253,16 +253,35 @@ public void processWithErrorHandling(ConsumerRecords<String, String> records) {
 
 ### Prérequis
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 cd formation-v2/
 ./scripts/up.sh
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+```
+
+</details>
 
 ---
 
 ### Étape 1 - Démarrer le module
 
 **Objectif** : Lancer les services du module.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker compose -f day-02-development/module-04-advanced-patterns/docker-compose.module.yml up -d --build
@@ -274,11 +293,76 @@ docker compose -f day-02-development/module-04-advanced-patterns/docker-compose.
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep m04
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Builder et pousser les images vers le registry local
+cd formation-v2/day-02-development/module-04-advanced-patterns
+
+docker build -t localhost:5000/m04-java-api:latest -f java/Dockerfile java/
+docker push localhost:5000/m04-java-api:latest
+
+# Déployer sur K8s
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m04-java-api
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m04-java-api
+  template:
+    metadata:
+      labels:
+        app: m04-java-api
+    spec:
+      containers:
+      - name: java-api
+        image: localhost:5000/m04-java-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bhf-kafka-kafka-bootstrap.kafka.svc:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m04-java-api
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 31082
+  selector:
+    app: m04-java-api
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl get pods -n kafka -l app=m04-java-api
+```
+
+</details>
+
 ---
 
 ### Étape 2 - Créer les topics
 
 **Objectif** : Créer le topic principal et le DLT.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Topic principal
@@ -309,9 +393,60 @@ docker exec kafka kafka-topics --create \
 docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep orders
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Créer les topics via KafkaTopic CRs
+cat <<EOF | kubectl apply -f -
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: orders
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 6
+  replicas: 3
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: orders.dlt
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 3
+  replicas: 3
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: orders.retry
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 3
+  replicas: 3
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl get kafkatopics -n kafka | grep orders
+```
+
+</details>
+
 **Résultat attendu** :
 
-```
+```text
 orders
 orders.DLT
 orders.retry

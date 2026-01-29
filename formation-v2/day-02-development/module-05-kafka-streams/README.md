@@ -202,14 +202,33 @@ stream.groupByKey()
 
 ### Prérequis
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 cd formation-v2/
 ./scripts/up.sh
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+```
+
+</details>
+
 ---
 
 ### Étape 1 - Créer les topics
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Topic d'entrée - événements de vente
@@ -242,9 +261,76 @@ docker exec kafka kafka-topics --create \
   --bootstrap-server localhost:9092
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Créer les topics via KafkaTopic CRs
+cat <<EOF | kubectl apply -f -
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sales-events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 6
+  replicas: 3
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sales-by-product
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 6
+  replicas: 3
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: sales-per-minute
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 6
+  replicas: 3
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: products
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: compact
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl get kafkatopics -n kafka | grep -E "sales|products"
+```
+
+</details>
+
 ---
 
 ### Étape 2 - Démarrer l'application Kafka Streams
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker compose -f day-02-development/module-05-kafka-streams/docker-compose.module.yml up -d --build
@@ -255,6 +341,67 @@ docker compose -f day-02-development/module-05-kafka-streams/docker-compose.modu
 ```bash
 docker logs m05-streams-app --tail 20
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Builder et pousser l'image
+cd formation-v2/day-02-development/module-05-kafka-streams
+docker build -t localhost:5000/m05-streams-app:latest -f java/Dockerfile java/
+docker push localhost:5000/m05-streams-app:latest
+
+# Déployer sur K8s
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m05-streams-app
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m05-streams-app
+  template:
+    metadata:
+      labels:
+        app: m05-streams-app
+    spec:
+      containers:
+      - name: streams-app
+        image: localhost:5000/m05-streams-app:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bhf-kafka-kafka-bootstrap.kafka.svc:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m05-streams-app
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 31084
+  selector:
+    app: m05-streams-app
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl logs -n kafka -l app=m05-streams-app --tail 20
+```
+
+</details>
 
 ---
 

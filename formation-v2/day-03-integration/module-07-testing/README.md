@@ -163,9 +163,26 @@ void testConsumerPollLoop() {
 
 ### Prérequis
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 - Java 17+
 - Maven 3.8+
-- Docker
+- Docker (pour Testcontainers)
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+- Java 17+
+- Maven 3.8+
+- kubectl configuré
+- Cluster Kafka Strimzi disponible
+
+> **Note** : Les tests d'intégration utilisent Testcontainers qui nécessite Docker. Pour K8s, vous pouvez utiliser un cluster Kafka existant en passant `KAFKA_BOOTSTRAP_SERVERS` comme variable d'environnement.
+
+</details>
 
 ---
 

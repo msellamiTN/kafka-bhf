@@ -214,14 +214,36 @@ gantt
 
 ### Prérequis
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 cd formation-v2/
 ./scripts/up.sh
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+
+# Vérifier les métriques JMX exposées par Strimzi
+kubectl get pods -n kafka -l strimzi.io/kind=Kafka -o jsonpath='{.items[*].metadata.name}'
+```
+
+</details>
+
 ---
 
 ### Étape 1 - Démarrer le stack de monitoring
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker compose -f day-03-integration/module-08-observability/docker-compose.module.yml up -d
@@ -236,6 +258,40 @@ curl -s http://localhost:9090/-/healthy
 # Grafana
 curl -s http://localhost:3000/api/health
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Déployer Prometheus et Grafana via Helm
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Installer kube-prometheus-stack
+helm install prometheus prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+
+# Vérifier le déploiement
+kubectl get pods -n monitoring
+```
+
+**Accès** :
+
+```bash
+# Prometheus (port-forward)
+kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+# Grafana (port-forward)
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+# Login: admin / prom-operator
+```
+
+> **Note** : Strimzi expose automatiquement les métriques JMX via PodMonitor CRs.
+
+</details>
 
 ---
 

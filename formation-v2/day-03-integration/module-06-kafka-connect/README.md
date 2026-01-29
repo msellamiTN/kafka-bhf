@@ -339,10 +339,29 @@ EXEC sys.sp_cdc_help_change_data_capture;
 
 ### Prérequis
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 cd formation-v2/
 ./scripts/up.sh
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+
+# Kafka Connect avec Strimzi utilise KafkaConnect CR
+kubectl get kafkaconnect -n kafka
+```
+
+</details>
 
 ---
 
