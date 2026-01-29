@@ -294,6 +294,8 @@ sequenceDiagram
 
 ### 7. Diagramme d'architecture du Lab
 
+#### Option A : Docker (Développement local)
+
 ```mermaid
 flowchart TB
     subgraph Docker["🐳 Docker Environment"]
@@ -327,7 +329,53 @@ flowchart TB
     style UIContainer fill:#fff3e0
 ```
 
+#### Option B : OKD/K3s (Production-like)
+
+```mermaid
+flowchart TB
+    subgraph K8s["☸️ Kubernetes (K3s/OKD)"]
+        subgraph KafkaNS["Namespace: kafka"]
+            subgraph Strimzi["Strimzi Operator"]
+                SO["🔧 Cluster Operator"]
+            end
+            
+            subgraph KafkaCluster["Kafka Cluster: bhf-kafka"]
+                B0["Broker 0"]
+                B1["Broker 1"]
+                B2["Broker 2"]
+                C0["Controller 0"]
+                C1["Controller 1"]
+                C2["Controller 2"]
+            end
+            
+            subgraph Services["Services"]
+                Bootstrap["bootstrap:9092"]
+                External["NodePort:32092"]
+            end
+            
+            KUI["Kafka UI<br/>NodePort:30808"]
+        end
+    end
+    
+    subgraph Host["💻 Votre Machine"]
+        Kubectl["🖥️ kubectl"]
+        Browser["🌐 Navigateur"]
+    end
+    
+    SO -->|"manages"| KafkaCluster
+    Kubectl -->|"NodePort 32092"| External
+    Browser -->|"NodePort 30808"| KUI
+    KUI --> Bootstrap
+    Bootstrap --> B0 & B1 & B2
+    
+    style K8s fill:#e8f5e8
+    style KafkaNS fill:#e3f2fd
+    style Strimzi fill:#fff3e0
+```
+
 ## Ports et URLs
+
+### 🐳 Mode Docker
 
 | Service | Port | URL |
 |---------|------|-----|
@@ -335,16 +383,22 @@ flowchart TB
 | Kafka (interne Docker) | 29092 | `kafka:29092` |
 | Kafka UI | 8080 | http://localhost:8080 |
 
+### ☸️ Mode OKD/K3s
+
+| Service | Port | URL |
+|---------|------|-----|
+| Kafka Bootstrap (interne) | 9092 | `bhf-kafka-kafka-bootstrap.kafka.svc:9092` |
+| Kafka Bootstrap (externe) | 32092 | `<NODE_IP>:32092` |
+| Kafka UI | 30808 | http://<NODE_IP>:30808 |
+
 ## Pré-requis
 
-### Logiciels nécessaires
+### 🐳 Mode Docker (Développement local)
 
 - ✅ **Docker Desktop** ou **Docker Engine** (version 20.10+)
 - ✅ **Docker Compose** plugin (`docker compose` - pas `docker-compose`)
 - ✅ **Terminal** (Bash, PowerShell, ou autre)
 - ✅ **Navigateur web** (Chrome, Firefox, Edge)
-
-### Vérification des pré-requis
 
 ```bash
 # Vérifier Docker
@@ -355,6 +409,31 @@ docker --version
 docker compose version
 # Attendu: Docker Compose version v2.x.x
 ```
+
+### ☸️ Mode OKD/K3s (Production-like)
+
+- ✅ **K3s** ou **OKD/OpenShift** installé
+- ✅ **kubectl** configuré
+- ✅ **Strimzi Operator** déployé
+- ✅ **Kafka cluster** déployé via Strimzi
+- ✅ **Terminal** (Bash, PowerShell, ou autre)
+- ✅ **Navigateur web** (Chrome, Firefox, Edge)
+
+```bash
+# Vérifier kubectl
+kubectl version --client
+# Attendu: Client Version: v1.28+ ou supérieur
+
+# Vérifier le cluster
+kubectl get nodes
+# Attendu: Au moins 1 node en status Ready
+
+# Vérifier Kafka
+kubectl get kafka -n kafka
+# Attendu: bhf-kafka avec status Ready
+```
+
+> 📖 **Installation K3s + Kafka** : Voir [Guide d'installation OKD/K3s](../../00-overview/INSTALL-OKD-UBUNTU.md) et les scripts dans `infra/Scripts/`
 
 ---
 
@@ -381,6 +460,9 @@ ls -la scripts/
 ### Étape 1 - Démarrage du cluster Kafka
 
 **Objectif** : Lancer le cluster Kafka en mode KRaft avec Kafka UI.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Explication** : Le script `up.sh` va :
 1. Télécharger l'image `apache/kafka:latest` (si nécessaire)
@@ -409,13 +491,55 @@ Kafka UI: http://localhost:8080
 
 **⏱️ Temps d'attente** : 30-60 secondes pour le premier démarrage.
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : Le cluster Kafka est déjà déployé via Strimzi. Vérifiez son état :
+
+**Commande** :
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+
+# Vérifier les pods Kafka
+kubectl get pods -n kafka
+```
+
+**Résultat attendu** :
+
+```
+NAME        CLUSTER     READY   WARNINGS
+bhf-kafka   bhf-kafka   True    
+
+NAME                                         READY   STATUS
+bhf-kafka-broker-0                           1/1     Running
+bhf-kafka-broker-1                           1/1     Running
+bhf-kafka-broker-2                           1/1     Running
+bhf-kafka-controller-3                       1/1     Running
+bhf-kafka-controller-4                       1/1     Running
+bhf-kafka-controller-5                       1/1     Running
+bhf-kafka-entity-operator-xxxx               2/2     Running
+kafka-ui-xxxx                                1/1     Running
+strimzi-cluster-operator-xxxx                1/1     Running
+```
+
+> 📝 **Note** : Si le cluster n'est pas déployé, exécutez `sudo ./infra/Scripts/03-install-kafka.sh`
+
+</details>
+
 **💡 Astuce** : Si vous voyez des erreurs, attendez 30 secondes et passez à l'étape suivante pour vérifier l'état.
 
 ---
 
 ### Étape 2 - Vérification de l'état du cluster
 
-**Objectif** : S'assurer que tous les conteneurs sont en fonctionnement.
+**Objectif** : S'assurer que tous les composants sont en fonctionnement.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -435,11 +559,48 @@ kafka       Up X minutes (healthy)   0.0.0.0:9092->9092/tcp, 0.0.0.0:29092->2909
 
 **⚠️ Si "unhealthy" ou "starting"** : Attendez 30 secondes supplémentaires et relancez la commande.
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+# Vérifier l'état du cluster Kafka
+kubectl get kafka bhf-kafka -n kafka
+
+# Vérifier les pods
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+
+# Vérifier les services
+kubectl get svc -n kafka
+```
+
+**Résultat attendu** :
+
+```
+NAME        CLUSTER     READY   WARNINGS
+bhf-kafka   bhf-kafka   True    
+
+NAME                        TYPE        CLUSTER-IP      PORT(S)
+bhf-kafka-kafka-bootstrap   ClusterIP   10.43.x.x       9091/TCP,9092/TCP,9093/TCP
+bhf-kafka-kafka-brokers     ClusterIP   None            9090/TCP,9091/TCP,9092/TCP
+bhf-kafka-kafka-external    NodePort    10.43.x.x       9094:32092/TCP
+```
+
+**✅ Checkpoint 1** : Le cluster affiche `READY: True` et les pods sont `Running`.
+
+</details>
+
 ---
 
 ### Étape 3 - Accès à Kafka UI
 
 **Objectif** : Vérifier que l'interface web est accessible.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Action** : Ouvrez votre navigateur et accédez à :
 
@@ -450,6 +611,29 @@ kafka       Up X minutes (healthy)   0.0.0.0:9092->9092/tcp, 0.0.0.0:29092->2909
 1. Page d'accueil de Kafka UI
 2. Cluster nommé `BHF-Training` dans la liste
 3. Statut du cluster : **Online**
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Action** : Récupérez l'IP du node et accédez à Kafka UI :
+
+```bash
+# Récupérer l'IP du node
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+echo "Kafka UI: http://$NODE_IP:30808"
+```
+
+👉 **http://<NODE_IP>:30808**
+
+**Ce que vous devez voir** :
+
+1. Page d'accueil de Kafka UI
+2. Cluster nommé `bhf-kafka` dans la liste
+3. Statut du cluster : **Online**
+
+</details>
 
 **Navigation dans Kafka UI** :
 
@@ -467,6 +651,9 @@ kafka       Up X minutes (healthy)   0.0.0.0:9092->9092/tcp, 0.0.0.0:29092->2909
 ### Étape 4 - Lister les topics existants
 
 **Objectif** : Utiliser la CLI Kafka pour lister les topics.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Explication** : Nous exécutons la commande `kafka-topics.sh` à l'intérieur du conteneur Kafka.
 
@@ -489,6 +676,43 @@ docker exec kafka /opt/kafka/bin/kafka-topics.sh \
 | `--bootstrap-server localhost:9092` | Adresse du broker Kafka |
 | `--list` | Action : lister les topics |
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : Nous utilisons un pod éphémère avec l'image Strimzi pour exécuter les commandes Kafka.
+
+**Commande** :
+
+```bash
+kubectl run kafka-cli -it --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  --restart=Never -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --list
+```
+
+**Résultat attendu** : Liste des topics pré-créés par Strimzi :
+
+```
+bhf-events
+bhf-transactions
+orders
+orders-dlt
+orders-retry
+```
+
+**Explication des paramètres** :
+
+| Paramètre | Description |
+|-----------|-------------|
+| `kubectl run kafka-cli` | Crée un pod éphémère nommé `kafka-cli` |
+| `-it --rm` | Interactif et supprimé après exécution |
+| `--image=quay.io/strimzi/kafka:latest-kafka-4.0.0` | Image Kafka Strimzi |
+| `bhf-kafka-kafka-bootstrap:9092` | Service bootstrap interne |
+| `--list` | Action : lister les topics |
+
+</details>
+
 ---
 
 ### Étape 5 - Création d'un topic avec 3 partitions
@@ -499,6 +723,9 @@ docker exec kafka /opt/kafka/bin/kafka-topics.sh \
 - **Parallélisme** : Plusieurs consommateurs peuvent lire en parallèle
 - **Scalabilité** : Les données sont distribuées sur plusieurs partitions
 - **Ordre** : L'ordre est garanti uniquement au sein d'une partition
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -528,11 +755,56 @@ Created topic bhf-demo.
 | `--partitions 3` | Nombre de partitions |
 | `--replication-factor 1` | Facteur de réplication (1 car cluster single-node) |
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Option 1 : Via KafkaTopic CR (recommandé)** :
+
+```bash
+cat <<EOF | kubectl apply -n kafka -f -
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: bhf-demo
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    retention.ms: 604800000
+EOF
+```
+
+**Option 2 : Via CLI** :
+
+```bash
+kubectl run kafka-cli -it --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  --restart=Never -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --create --if-not-exists --topic bhf-demo --partitions 3 --replication-factor 3
+```
+
+**Résultat attendu** :
+
+```
+kafkatopic.kafka.strimzi.io/bhf-demo created
+```
+
+> 📝 **Note** : En mode K8s avec 3 brokers, utilisez `--replication-factor 3` pour la haute disponibilité.
+
+</details>
+
 ---
 
 ### Étape 6 - Description du topic
 
 **Objectif** : Vérifier la configuration du topic créé.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -552,14 +824,45 @@ Topic: bhf-demo	TopicId: xxxxx	PartitionCount: 3	ReplicationFactor: 1	Configs:
 	Topic: bhf-demo	Partition: 2	Leader: 1	Replicas: 1	Isr: 1
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Option 1 : Via kubectl** :
+
+```bash
+kubectl get kafkatopic bhf-demo -n kafka -o yaml
+```
+
+**Option 2 : Via CLI Kafka** :
+
+```bash
+kubectl run kafka-cli -it --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  --restart=Never -n kafka -- \
+  bin/kafka-topics.sh --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --describe --topic bhf-demo
+```
+
+**Résultat attendu** :
+
+```
+Topic: bhf-demo	TopicId: xxxxx	PartitionCount: 3	ReplicationFactor: 3	Configs: 
+	Topic: bhf-demo	Partition: 0	Leader: 0	Replicas: 0,1,2	Isr: 0,1,2
+	Topic: bhf-demo	Partition: 1	Leader: 1	Replicas: 1,2,0	Isr: 1,2,0
+	Topic: bhf-demo	Partition: 2	Leader: 2	Replicas: 2,0,1	Isr: 2,0,1
+```
+
+</details>
+
 **Explication de la sortie** :
 
 | Champ | Description |
 |-------|-------------|
 | `PartitionCount: 3` | Le topic a bien 3 partitions |
-| `Leader: 1` | Le broker 1 est leader de chaque partition |
-| `Replicas: 1` | Une seule réplique (cluster single-node) |
-| `Isr: 1` | In-Sync Replicas : répliques synchronisées |
+| `Leader: X` | Le broker X est leader de la partition |
+| `Replicas` | Liste des brokers hébergeant une réplique |
+| `Isr` | In-Sync Replicas : répliques synchronisées |
 
 **✅ Checkpoint 3** : Le topic `bhf-demo` existe avec 3 partitions.
 
@@ -573,6 +876,9 @@ Topic: bhf-demo	TopicId: xxxxx	PartitionCount: 3	ReplicationFactor: 1	Configs:
 - Sérialiser les messages
 - Déterminer la partition de destination
 - Envoyer les messages au broker
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -591,6 +897,28 @@ echo "$MSG" | docker exec -i kafka /opt/kafka/bin/kafka-console-producer.sh \
 
 **💡 Note** : Le flag `-i` permet de passer l'entrée standard au conteneur.
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+# Générer un message unique avec timestamp
+MSG="hello-bhf-$(date +%s)"
+echo "Message à envoyer: $MSG"
+
+# Envoyer le message via pod éphémère
+echo "$MSG" | kubectl run kafka-producer -i --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  --restart=Never -n kafka -- \
+  bin/kafka-console-producer.sh --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --topic bhf-demo
+```
+
+**Résultat attendu** : Le pod se termine avec succès après envoi du message.
+
+</details>
+
 ---
 
 ### Étape 8 - Consommation du message
@@ -601,6 +929,9 @@ echo "$MSG" | docker exec -i kafka /opt/kafka/bin/kafka-console-producer.sh \
 - Souscrire à un ou plusieurs topics
 - Lire les messages depuis les partitions
 - Gérer les offsets (position de lecture)
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -618,6 +949,28 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
 hello-bhf-1706390000
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+kubectl run kafka-consumer -it --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  --restart=Never -n kafka -- \
+  bin/kafka-console-consumer.sh --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic bhf-demo --from-beginning --timeout-ms 10000
+```
+
+**Résultat attendu** :
+
+```
+hello-bhf-1706390000
+```
+
+</details>
+
 **Explication des paramètres** :
 
 | Paramètre | Description |
@@ -633,6 +986,9 @@ hello-bhf-1706390000
 
 **Objectif** : Observer les messages via l'interface graphique.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Actions** :
 
 1. Ouvrez **http://localhost:8080** dans votre navigateur
@@ -641,6 +997,27 @@ hello-bhf-1706390000
 4. Cliquez sur le topic **bhf-demo**
 5. Cliquez sur l'onglet **Messages**
 6. Cliquez sur le bouton **▶ Fetch Messages** ou réglez sur **Live mode**
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Actions** :
+
+1. Récupérez l'URL Kafka UI :
+   ```bash
+   NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+   echo "Kafka UI: http://$NODE_IP:30808"
+   ```
+2. Ouvrez **http://<NODE_IP>:30808** dans votre navigateur
+3. Cliquez sur le cluster **bhf-kafka**
+4. Dans le menu, cliquez sur **Topics**
+5. Cliquez sur le topic **bhf-demo**
+6. Cliquez sur l'onglet **Messages**
+7. Cliquez sur le bouton **▶ Fetch Messages** ou réglez sur **Live mode**
+
+</details>
 
 **Ce que vous devez voir** :
 
@@ -663,6 +1040,9 @@ hello-bhf-1706390000
 
 **Objectif** : Exécuter le script de validation pour confirmer que tout fonctionne.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Commande** :
 
 ```bash
@@ -682,9 +1062,37 @@ OK
 4. ✅ Le topic `bhf-demo` existe avec 3 partitions
 5. ✅ Un message peut être produit et consommé
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+./day-01-foundations/module-01-cluster/scripts/validate.sh --k8s
+```
+
+**Résultat attendu** :
+
+```
+OK
+```
+
+**Ce que le script vérifie** :
+1. ✅ Le cluster Kafka est en état `Ready`
+2. ✅ Les pods Kafka sont en état `Running`
+3. ✅ Kafka UI est accessible
+4. ✅ Le topic `bhf-demo` existe avec 3 partitions
+5. ✅ Un message peut être produit et consommé
+
+</details>
+
 ---
 
 ## ✅ Récapitulatif des checkpoints
+
+### 🐳 Mode Docker
 
 | # | Checkpoint | Statut |
 |---|------------|--------|
@@ -695,11 +1103,24 @@ OK
 | 5 | Message visible dans Kafka UI | ☐ |
 | 6 | Script `validate.sh` retourne OK | ☐ |
 
+### ☸️ Mode OKD/K3s
+
+| # | Checkpoint | Statut |
+|---|------------|--------|
+| 1 | Cluster Kafka `bhf-kafka` est Ready | ☐ |
+| 2 | Kafka UI accessible sur http://<NODE_IP>:30808 | ☐ |
+| 3 | Topic `bhf-demo` créé avec 3 partitions | ☐ |
+| 4 | Message produit et consommé via kubectl | ☐ |
+| 5 | Message visible dans Kafka UI | ☐ |
+| 6 | Script `validate.sh --k8s` retourne OK | ☐ |
+
 ---
 
 ## 🔧 Troubleshooting
 
-### Problème : Kafka ne démarre pas
+### 🐳 Mode Docker
+
+#### Problème : Kafka ne démarre pas
 
 **Symptôme** : Le conteneur `kafka` reste en `starting` ou `unhealthy`.
 
@@ -721,7 +1142,7 @@ OK
    docker volume rm bhf-kafka_kafka-data
    ```
 
-### Problème : Kafka UI non accessible
+#### Problème : Kafka UI non accessible
 
 **Symptôme** : http://localhost:8080 ne répond pas.
 
@@ -745,7 +1166,7 @@ OK
    netstat -ano | findstr :8080
    ```
 
-### Problème : Commande kafka-topics.sh non trouvée
+#### Problème : Commande kafka-topics.sh non trouvée
 
 **Symptôme** : `kafka-topics: command not found`
 
@@ -753,9 +1174,79 @@ OK
 
 ---
 
+### ☸️ Mode OKD/K3s
+
+#### Problème : Kafka cluster non Ready
+
+**Symptôme** : `kubectl get kafka -n kafka` affiche `READY: False`.
+
+**Solutions** :
+
+1. **Vérifiez les événements** :
+   ```bash
+   kubectl describe kafka bhf-kafka -n kafka
+   ```
+
+2. **Vérifiez les logs de l'opérateur Strimzi** :
+   ```bash
+   kubectl logs -n kafka -l name=strimzi-cluster-operator --tail=50
+   ```
+
+3. **Vérifiez les pods Kafka** :
+   ```bash
+   kubectl get pods -n kafka
+   kubectl logs -n kafka bhf-kafka-broker-0 --tail=50
+   ```
+
+#### Problème : Kafka UI non accessible
+
+**Symptôme** : http://<NODE_IP>:30808 ne répond pas.
+
+**Solutions** :
+
+1. **Vérifiez le pod Kafka UI** :
+   ```bash
+   kubectl get pods -n kafka -l app=kafka-ui
+   kubectl logs -n kafka -l app=kafka-ui --tail=50
+   ```
+
+2. **Vérifiez le service NodePort** :
+   ```bash
+   kubectl get svc kafka-ui -n kafka
+   ```
+
+3. **Vérifiez le firewall** :
+   ```bash
+   sudo ufw status
+   # Si actif, ouvrir le port
+   sudo ufw allow 30808/tcp
+   ```
+
+#### Problème : Pod kafka-cli reste en Pending
+
+**Symptôme** : Le pod éphémère ne démarre pas.
+
+**Solutions** :
+
+1. **Supprimez les pods orphelins** :
+   ```bash
+   kubectl delete pod kafka-cli kafka-producer kafka-consumer -n kafka --ignore-not-found
+   ```
+
+2. **Vérifiez les ressources du cluster** :
+   ```bash
+   kubectl top nodes
+   kubectl describe nodes
+   ```
+
+---
+
 ## 🧹 Nettoyage
 
-**Objectif** : Arrêter et supprimer les conteneurs.
+**Objectif** : Arrêter et supprimer l'environnement.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -773,6 +1264,34 @@ Stopping Kafka KRaft SINGLE NODE...
  ✔ Volume bhf-kafka_kafka-data Removed
 ✅ Kafka KRaft single-node stopped and cleaned up!
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+> ⚠️ **Attention** : Le nettoyage en mode K8s supprime le cluster Kafka complet. N'utilisez que si nécessaire.
+
+**Supprimer uniquement le topic bhf-demo** :
+
+```bash
+kubectl delete kafkatopic bhf-demo -n kafka
+```
+
+**Nettoyage complet** (utiliser le script) :
+
+```bash
+sudo ./infra/Scripts/06-cleanup.sh --kafka
+```
+
+**Ce que le script supprime** :
+- Le cluster Kafka `bhf-kafka`
+- Les KafkaNodePools (brokers, controllers)
+- Les topics créés
+- Les PVCs de données
+- Kafka UI
+
+</details>
 
 ---
 
