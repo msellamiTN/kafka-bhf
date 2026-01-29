@@ -684,6 +684,9 @@ kubectl get svc m02-java-api -n kafka
 
 **Objectif** : S'assurer que tous les services sont opérationnels.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Commande** :
 
 ```bash
@@ -701,13 +704,35 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 | m02-java-api | Up |
 | m02-dotnet-api | Up |
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+kubectl get pods -n kafka
+```
+
+**Résultat attendu** :
+
+| Pod | Statut attendu |
+|-----|----------------|
+| bhf-kafka-* | Running |
+| m02-java-api-* | Running |
+| m02-dotnet-api-* | Running (si déployé) |
+
+</details>
+
 ---
 
 ### Étape 4 - Test de santé des APIs
 
 **Objectif** : Vérifier que les APIs répondent.
 
-**Commandes** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Test Java API
@@ -718,6 +743,26 @@ curl -fsS http://localhost:18080/health
 curl -fsS http://localhost:18081/health
 # Résultat attendu: OK
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Test Java API (NodePort 31080)
+curl -fsS http://localhost:31080/health
+# Résultat attendu: OK
+
+# Test .NET API (NodePort 31081)
+curl -fsS http://localhost:31081/health
+# Résultat attendu: OK
+
+# Si localhost ne fonctionne pas, utilisez l'IP du node:
+curl -fsS http://$(hostname -I | awk '{print $1}'):31080/health
+```
+
+</details>
 
 **✅ Checkpoint 02.0** : Les deux APIs répondent `OK`.
 
@@ -740,7 +785,8 @@ Envoyer un message en mode **synchrone** et comprendre la réponse avec l'offset
 - La **partition** utilisée
 - L'**offset** du message
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Générer un ID unique
@@ -750,6 +796,22 @@ echo "EventId: $EVENT_ID"
 # Envoyer le message
 curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Générer un ID unique
+EVENT_ID="JAVA-SYNC-$(date +%s)"
+echo "EventId: $EVENT_ID"
+
+# Envoyer le message (NodePort 31080)
+curl -fsS -X POST "http://localhost:31080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -779,12 +841,25 @@ curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&e
 
 **Objectif** : Vérifier que l'API .NET fonctionne de la même manière.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 EVENT_ID="DOTNET-SYNC-$(date +%s)"
 curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+EVENT_ID="DOTNET-SYNC-$(date +%s)"
+curl -fsS -X POST "http://localhost:31081/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
+```
+
+</details>
 
 **✅ Checkpoint 02.1** : Les deux APIs retournent un JSON avec `partition` et `offset`.
 
@@ -794,12 +869,35 @@ curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&e
 
 **Objectif** : Observer les messages envoyés.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Actions** :
 
 1. Ouvrez **http://localhost:8080**
 2. Cliquez sur le cluster **BHF-Training**
 3. Menu **Topics** → **bhf-transactions**
 4. Onglet **Messages** → **Fetch Messages**
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Via kubectl** :
+
+```bash
+# Consommer les messages directement
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic bhf-transactions --from-beginning --max-messages 5
+```
+
+**Via Kafka UI (si déployé)** : Accédez via le NodePort ou Route configuré.
+
+</details>
 
 **Ce que vous devez voir** :
 - Vos messages avec les `eventId` envoyés
@@ -825,7 +923,8 @@ Comprendre le mode **asynchrone** et comment récupérer le statut via polling.
 2. Le message est envoyé en arrière-plan
 3. Vous consultez le statut via `/api/v1/status`
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 EVENT_ID="JAVA-ASYNC-$(date +%s)"
@@ -838,6 +937,25 @@ echo "Réponse: $RESPONSE"
 REQ_ID=$(echo "$RESPONSE" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
 echo "RequestId: $REQ_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+EVENT_ID="JAVA-ASYNC-$(date +%s)"
+
+# Envoyer en asynchrone (NodePort 31080)
+RESPONSE=$(curl -fsS -X POST "http://localhost:31080/api/v1/send?mode=idempotent&sendMode=async&eventId=$EVENT_ID")
+echo "Réponse: $RESPONSE"
+
+# Extraire le requestId
+REQ_ID=$(echo "$RESPONSE" | sed -n 's/.*"requestId":"\([^"]*\)".*/\1/p')
+echo "RequestId: $REQ_ID"
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -855,7 +973,8 @@ echo "RequestId: $REQ_ID"
 
 **Objectif** : Récupérer le résultat de l'envoi asynchrone.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Attendre 2 secondes pour que l'envoi se termine
@@ -864,6 +983,21 @@ sleep 2
 # Consulter le statut
 curl -fsS "http://localhost:18080/api/v1/status?requestId=$REQ_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Attendre 2 secondes pour que l'envoi se termine
+sleep 2
+
+# Consulter le statut (NodePort 31080)
+curl -fsS "http://localhost:31080/api/v1/status?requestId=$REQ_ID"
+```
+
+</details>
 
 **Résultat attendu (succès)** :
 
@@ -893,6 +1027,8 @@ curl -fsS "http://localhost:18080/api/v1/status?requestId=$REQ_ID"
 ### Objectif
 
 Simuler des problèmes réseau pour observer le comportement des retries.
+
+> ☸️ **Note K8s** : Toxiproxy n'est pas disponible en mode K8s. Les étapes 10-13 sont spécifiques au mode Docker. Pour simuler des pannes en K8s, utilisez des outils comme `kubectl delete pod` ou des NetworkPolicies.
 
 ---
 
@@ -1053,7 +1189,8 @@ Comprendre comment les clés influencent le partitionnement.
 
 **Objectif** : Envoyer des messages sur des partitions spécifiques.
 
-**Commandes** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Message sur partition 0
@@ -1066,13 +1203,32 @@ curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&e
 curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=sync&eventId=P2-$(date +%s)&partition=2"
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Message sur partition 0 (NodePort 31080)
+curl -fsS -X POST "http://localhost:31080/api/v1/send?mode=plain&sendMode=sync&eventId=P0-$(date +%s)&partition=0"
+
+# Message sur partition 1
+curl -fsS -X POST "http://localhost:31080/api/v1/send?mode=plain&sendMode=sync&eventId=P1-$(date +%s)&partition=1"
+
+# Message sur partition 2
+curl -fsS -X POST "http://localhost:31080/api/v1/send?mode=plain&sendMode=sync&eventId=P2-$(date +%s)&partition=2"
+```
+
+</details>
+
 ---
 
 ### Étape 16 - Vérification des partitions
 
 **Objectif** : Confirmer la distribution des messages.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
@@ -1083,6 +1239,24 @@ docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --property print.partition=true \
   --property print.offset=true
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic bhf-transactions --from-beginning \
+  --timeout-ms 5000 \
+  --property print.partition=true \
+  --property print.offset=true
+```
+
+</details>
 
 **Résultat attendu** : Messages sur différentes partitions (0, 1, 2).
 
@@ -1100,7 +1274,8 @@ Comprendre la compaction et son utilité pour les états.
 
 **Objectif** : Créer un topic avec la politique de compaction.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker exec kafka /opt/kafka/bin/kafka-topics.sh \
@@ -1114,13 +1289,40 @@ docker exec kafka /opt/kafka/bin/kafka-topics.sh \
   --config min.cleanable.dirty.ratio=0.01
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: bhf-compact-demo
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: bhf-kafka
+spec:
+  partitions: 1
+  replicas: 3
+  config:
+    cleanup.policy: compact
+    segment.ms: "1000"
+    min.cleanable.dirty.ratio: "0.01"
+EOF
+```
+
+</details>
+
 ---
 
 ### Étape 18 - Envoi de plusieurs versions
 
 **Objectif** : Envoyer plusieurs valeurs pour la même clé.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 KEY="customer-42"
@@ -1134,6 +1336,26 @@ curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&t
 # Version 3 (finale)
 curl -fsS -X POST "http://localhost:18081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V3&key=$KEY"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+KEY="customer-42"
+
+# Version 1 (NodePort 31081)
+curl -fsS -X POST "http://localhost:31081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V1&key=$KEY"
+
+# Version 2
+curl -fsS -X POST "http://localhost:31081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V2&key=$KEY"
+
+# Version 3 (finale)
+curl -fsS -X POST "http://localhost:31081/api/v1/send?mode=plain&sendMode=sync&topic=bhf-compact-demo&eventId=V3&key=$KEY"
+```
+
+</details>
 
 **Note** : Après compaction (asynchrone), seul `V3` sera conservé pour `customer-42`.
 

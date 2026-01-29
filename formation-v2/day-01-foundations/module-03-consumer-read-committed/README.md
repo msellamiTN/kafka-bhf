@@ -657,7 +657,8 @@ kubectl get svc m03-java-api -n kafka
 
 **Objectif** : S'assurer que les services sont opérationnels.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Status}}'
@@ -672,13 +673,33 @@ docker ps --format 'table {{.Names}}\t{{.Status}}'
 | m03-java-api | Up |
 | m03-dotnet-api | Up |
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl get pods -n kafka
+```
+
+**Résultat attendu** :
+
+| Pod | Statut attendu |
+|-----|----------------|
+| bhf-kafka-* | Running |
+| m03-java-api-* | Running |
+| m03-dotnet-api-* | Running (si déployé) |
+
+</details>
+
 ---
 
 ### Étape 4 - Test de santé des APIs
 
 **Objectif** : Vérifier que les APIs répondent.
 
-**Commandes** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Test Java API
@@ -689,6 +710,23 @@ curl -fsS http://localhost:18090/health
 curl -fsS http://localhost:18091/health
 # Résultat attendu: OK
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Test Java API (NodePort 31090)
+curl -fsS http://localhost:31090/health
+# Résultat attendu: OK
+
+# Test .NET API (NodePort 31091)
+curl -fsS http://localhost:31091/health
+# Résultat attendu: OK
+```
+
+</details>
 
 **✅ Checkpoint 03.0** : Les deux APIs répondent `OK`.
 
@@ -724,11 +762,23 @@ echo "Transaction abortée: $ABORTED_ID"
 
 **Théorie** : Une transaction committée rend le message visible aux consumers `read_committed`.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -fsS -X POST "http://localhost:18090/api/v1/tx/commit?txId=$COMMITTED_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -fsS -X POST "http://localhost:31090/api/v1/tx/commit?txId=$COMMITTED_ID"
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -747,11 +797,23 @@ curl -fsS -X POST "http://localhost:18090/api/v1/tx/commit?txId=$COMMITTED_ID"
 
 **Théorie** : Une transaction abortée rend le message **invisible** aux consumers `read_committed`.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -fsS -X POST "http://localhost:18090/api/v1/tx/abort?txId=$ABORTED_ID"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -fsS -X POST "http://localhost:31090/api/v1/tx/abort?txId=$ABORTED_ID"
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -791,11 +853,23 @@ sleep 5
 
 **Objectif** : Consulter les métriques du consumer Java.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -fsS http://localhost:18090/api/v1/metrics
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -fsS http://localhost:31090/api/v1/metrics
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -818,11 +892,23 @@ curl -fsS http://localhost:18090/api/v1/metrics
 
 **Objectif** : Consulter les métriques du consumer .NET.
 
-**Commande** :
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -fsS http://localhost:18091/api/v1/metrics
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -fsS http://localhost:31091/api/v1/metrics
+```
+
+</details>
 
 **Résultat attendu** : Identique au consumer Java.
 
@@ -905,12 +991,35 @@ Observer les messages dans Kafka UI et comprendre la différence de visibilité.
 
 **Objectif** : Visualiser les messages dans l'interface graphique.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Actions** :
 
 1. Ouvrez **http://localhost:8080**
 2. Cliquez sur le cluster **BHF-Training**
 3. Menu **Topics** → Recherchez le topic de test
 4. Onglet **Messages** → **Fetch Messages**
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Via kubectl** :
+
+```bash
+# Consommer les messages directement
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic bhf-read-committed-demo --from-beginning --max-messages 5
+```
+
+**Via Kafka UI (si déployé)** : Accédez via le NodePort ou Route configuré.
+
+</details>
 
 **Ce que vous devez observer** :
 
