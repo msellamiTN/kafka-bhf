@@ -23,7 +23,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Configuration
 KAFKA_NAMESPACE="${KAFKA_NAMESPACE:-kafka}"
 KAFKA_CLUSTER_NAME="${KAFKA_CLUSTER_NAME:-bhf-kafka}"
-KAFKA_VERSION="${KAFKA_VERSION:-3.6.0}"
+KAFKA_VERSION="${KAFKA_VERSION:-4.0.0}"
 KAFKA_REPLICAS="${KAFKA_REPLICAS:-3}"
 STRIMZI_VERSION="${STRIMZI_VERSION:-latest}"
 
@@ -93,10 +93,10 @@ install_strimzi() {
 }
 
 #===============================================================================
-# Deploy Kafka Cluster
+# Deploy Kafka Cluster (KRaft mode - no ZooKeeper)
 #===============================================================================
 deploy_kafka_cluster() {
-    log_info "Deploying Kafka cluster '$KAFKA_CLUSTER_NAME'..."
+    log_info "Deploying Kafka cluster '$KAFKA_CLUSTER_NAME' in KRaft mode..."
     
     # Check if cluster already exists
     if kubectl get kafka "$KAFKA_CLUSTER_NAME" -n "$KAFKA_NAMESPACE" &> /dev/null; then
@@ -104,23 +104,88 @@ deploy_kafka_cluster() {
         read -p "Do you want to delete and recreate? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
+            kubectl delete kafkanodepool --all -n "$KAFKA_NAMESPACE" 2>/dev/null || true
             kubectl delete kafka "$KAFKA_CLUSTER_NAME" -n "$KAFKA_NAMESPACE"
+            kubectl delete pvc -l strimzi.io/cluster="$KAFKA_CLUSTER_NAME" -n "$KAFKA_NAMESPACE" 2>/dev/null || true
             sleep 10
         else
             return 0
         fi
     fi
     
-    # Create Kafka cluster manifest
+    # Create KafkaNodePool for brokers (required for KRaft mode in Strimzi 0.46+)
+    log_info "Creating KafkaNodePool for brokers..."
+    cat <<EOF | kubectl apply -n "$KAFKA_NAMESPACE" -f -
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker
+  labels:
+    strimzi.io/cluster: $KAFKA_CLUSTER_NAME
+spec:
+  replicas: $KAFKA_REPLICAS
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        deleteClaim: false
+        class: local-path
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 1000m
+EOF
+
+    # Create KafkaNodePool for controllers (KRaft requires separate controller nodes)
+    log_info "Creating KafkaNodePool for controllers..."
+    cat <<EOF | kubectl apply -n "$KAFKA_NAMESPACE" -f -
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  labels:
+    strimzi.io/cluster: $KAFKA_CLUSTER_NAME
+spec:
+  replicas: 3
+  roles:
+    - controller
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 5Gi
+        deleteClaim: false
+        class: local-path
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+EOF
+
+    # Create Kafka cluster manifest (KRaft mode)
+    log_info "Creating Kafka cluster..."
     cat <<EOF | kubectl apply -n "$KAFKA_NAMESPACE" -f -
 apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
 metadata:
   name: $KAFKA_CLUSTER_NAME
+  annotations:
+    strimzi.io/kraft: "enabled"
+    strimzi.io/node-pools: "enabled"
 spec:
   kafka:
     version: $KAFKA_VERSION
-    replicas: $KAFKA_REPLICAS
     listeners:
       - name: plain
         port: 9092
@@ -137,58 +202,21 @@ spec:
         configuration:
           bootstrap:
             nodePort: 32092
-          brokers:
-            - broker: 0
-              nodePort: 32100
-            - broker: 1
-              nodePort: 32101
-            - broker: 2
-              nodePort: 32102
     config:
       offsets.topic.replication.factor: $KAFKA_REPLICAS
       transaction.state.log.replication.factor: $KAFKA_REPLICAS
       transaction.state.log.min.isr: 2
       default.replication.factor: $KAFKA_REPLICAS
       min.insync.replicas: 2
-      inter.broker.protocol.version: "3.6"
       log.retention.hours: 168
       log.segment.bytes: 1073741824
       num.partitions: 6
-    storage:
-      type: jbod
-      volumes:
-        - id: 0
-          type: persistent-claim
-          size: 10Gi
-          deleteClaim: false
-          class: local-path
-    resources:
-      requests:
-        memory: 1Gi
-        cpu: 500m
-      limits:
-        memory: 2Gi
-        cpu: 1000m
     metricsConfig:
       type: jmxPrometheusExporter
       valueFrom:
         configMapKeyRef:
           name: kafka-metrics
           key: kafka-metrics-config.yml
-  zookeeper:
-    replicas: $KAFKA_REPLICAS
-    storage:
-      type: persistent-claim
-      size: 5Gi
-      deleteClaim: false
-      class: local-path
-    resources:
-      requests:
-        memory: 512Mi
-        cpu: 250m
-      limits:
-        memory: 1Gi
-        cpu: 500m
   entityOperator:
     topicOperator:
       resources:
@@ -208,7 +236,7 @@ spec:
           cpu: 250m
 EOF
 
-    log_success "Kafka cluster manifest applied"
+    log_success "Kafka cluster manifest applied (KRaft mode)"
 }
 
 #===============================================================================
@@ -282,7 +310,7 @@ create_default_topics() {
     log_info "Creating default Kafka topics..."
     
     cat <<EOF | kubectl apply -n "$KAFKA_NAMESPACE" -f -
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: orders
@@ -295,7 +323,7 @@ spec:
     retention.ms: 604800000
     segment.bytes: 1073741824
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: orders-dlt
@@ -307,7 +335,7 @@ spec:
   config:
     retention.ms: 2592000000
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: orders-retry
@@ -319,7 +347,7 @@ spec:
   config:
     retention.ms: 86400000
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: bhf-transactions
@@ -331,7 +359,7 @@ spec:
   config:
     retention.ms: 604800000
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: bhf-events
@@ -450,7 +478,7 @@ print_summary() {
     echo "  Kafka UI:          http://localhost:30808"
     echo ""
     echo "  Test connectivity:"
-    echo "    kubectl run kafka-test -it --rm --image=quay.io/strimzi/kafka:latest-kafka-$KAFKA_VERSION \\"
+    echo "    kubectl run kafka-test -it --rm --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \\"
     echo "      --restart=Never -- bin/kafka-topics.sh --bootstrap-server $BOOTSTRAP_INTERNAL --list"
     echo ""
     echo "============================================================"
