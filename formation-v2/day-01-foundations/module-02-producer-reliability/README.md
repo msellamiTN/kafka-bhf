@@ -487,11 +487,29 @@ flowchart TB
 
 ### Logiciels
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 - ✅ Docker + Docker Compose
 - ✅ curl (ligne de commande)
 - ✅ Navigateur web
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+- ✅ Cluster Kubernetes (K3s, OKD, ou OpenShift)
+- ✅ kubectl configuré
+- ✅ Strimzi Operator installé
+- ✅ curl (ligne de commande)
+
+</details>
+
 ### Cluster Kafka démarré
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 cd formation-v2/
@@ -506,6 +524,28 @@ docker ps --format 'table {{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 **Résultat attendu** : `kafka` et `kafka-ui` sont `Up (healthy)`.
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+
+# Résultat attendu:
+# NAME        DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   ...
+# bhf-kafka   3                                              True    ...
+```
+
+**Vérification des pods** :
+
+```bash
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+```
+
+</details>
 
 ---
 
@@ -531,7 +571,11 @@ cd formation-v2/
 
 **Objectif** : Lancer les conteneurs du module.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Explication** : Cette commande lance :
+
 - **Toxiproxy** : Proxy réseau pour injecter des pannes
 - **toxiproxy-init** : Configuration initiale du proxy (one-shot)
 - **m02-java-api** : API Spring Boot (Java)
@@ -548,13 +592,91 @@ docker compose -f day-01-foundations/module-02-producer-reliability/docker-compo
 
 **Résultat attendu** :
 
-```
+```text
 [+] Running 4/4
  ✔ Container toxiproxy        Healthy
  ✔ Container toxiproxy-init   Started
  ✔ Container m02-java-api     Started
  ✔ Container m02-dotnet-api   Started
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : En mode K8s, les APIs doivent être déployées comme des Deployments avec des Services NodePort.
+
+**Option 1 - Utiliser les images Docker locales** :
+
+```bash
+# Builder et pousser les images vers le registry local
+cd formation-v2/day-01-foundations/module-02-producer-reliability
+
+# Build Java API
+docker build -t localhost:5000/m02-java-api:latest -f java-api/Dockerfile java-api/
+docker push localhost:5000/m02-java-api:latest
+
+# Build .NET API
+docker build -t localhost:5000/m02-dotnet-api:latest -f dotnet-api/Dockerfile dotnet-api/
+docker push localhost:5000/m02-dotnet-api:latest
+```
+
+**Option 2 - Déployer sur K8s** :
+
+```bash
+# Créer le déploiement Java API
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m02-java-api
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m02-java-api
+  template:
+    metadata:
+      labels:
+        app: m02-java-api
+    spec:
+      containers:
+      - name: java-api
+        image: localhost:5000/m02-java-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bhf-kafka-kafka-bootstrap.kafka.svc:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m02-java-api
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 31080
+  selector:
+    app: m02-java-api
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl get pods -n kafka -l app=m02-java-api
+kubectl get svc m02-java-api -n kafka
+```
+
+> **Note** : En mode K8s, Toxiproxy n'est pas utilisé. Les tests de latence peuvent être effectués avec des outils comme `tc` (traffic control) ou en simulant des pannes de pods.
+
+</details>
 
 ---
 
@@ -866,7 +988,11 @@ Prouver que l'idempotence évite les doublons lors des retries.
 
 **Objectif** : Valider le comportement idempotent vs non-idempotent.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Explication** : Le script `validate.sh` :
+
 1. Injecte de la latence via Toxiproxy
 2. Envoie des messages en mode `plain` et `idempotent`
 3. Compte les messages dans Kafka
@@ -880,11 +1006,36 @@ Prouver que l'idempotence évite les doublons lors des retries.
 
 **Résultat attendu** :
 
-```
+```text
 OK: java_idempotent=1 java_plain=1 dotnet_idempotent=1 dotnet_plain=1
 ```
 
 **Note** : Si `java_plain` ou `dotnet_plain` > 1, c'est normal ! Cela prouve que les retries peuvent créer des doublons sans idempotence.
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : En mode K8s, le script valide le producteur idempotent sans injection de latence Toxiproxy.
+
+**Commande** :
+
+```bash
+./day-01-foundations/module-02-producer-reliability/scripts/validate.sh --k8s
+```
+
+**Résultat attendu** :
+
+```text
+Running validation in K8s mode...
+NOTE: K8s mode tests idempotent producer without Toxiproxy latency injection
+OK: java_idempotent=1 (K8s mode - no latency injection)
+```
+
+> **Note** : Si les APIs ne sont pas déployées sur K8s, le script validera uniquement le cluster Kafka.
+
+</details>
 
 **✅ Checkpoint 02.4** : L'idempotence produit exactement 1 message.
 

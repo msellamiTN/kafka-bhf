@@ -475,11 +475,29 @@ flowchart TB
 
 ### Logiciels
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 - ✅ Docker + Docker Compose
 - ✅ curl (ligne de commande)
 - ✅ Navigateur web
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+- ✅ Cluster Kubernetes (K3s, OKD, ou OpenShift)
+- ✅ kubectl configuré
+- ✅ Strimzi Operator installé
+- ✅ curl (ligne de commande)
+
+</details>
+
 ### Cluster Kafka démarré
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 cd formation-v2/
@@ -493,6 +511,28 @@ docker ps --format 'table {{.Names}}\t{{.Status}}' | grep kafka
 ```
 
 **Résultat attendu** : `kafka` et `kafka-ui` sont `Up (healthy)`.
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+
+# Résultat attendu:
+# NAME        DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   ...
+# bhf-kafka   3                                              True    ...
+```
+
+**Vérification des pods** :
+
+```bash
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+```
+
+</details>
 
 ---
 
@@ -518,6 +558,9 @@ cd formation-v2/
 
 **Objectif** : Lancer les conteneurs du module.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Explication** : Cette commande lance :
 
 - **m03-java-api** : API avec producer transactionnel et consumer `read_committed`
@@ -532,6 +575,81 @@ docker compose -f infra/docker-compose.single-node.yml \
 ```
 
 **⏱️ Temps d'attente** : 1-2 minutes (build des images).
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : En mode K8s, les APIs doivent être déployées comme des Deployments avec des Services NodePort.
+
+**Option 1 - Builder et pousser les images** :
+
+```bash
+cd formation-v2/day-01-foundations/module-03-consumer-read-committed
+
+# Build Java API
+docker build -t localhost:5000/m03-java-api:latest -f java-api/Dockerfile java-api/
+docker push localhost:5000/m03-java-api:latest
+
+# Build .NET API
+docker build -t localhost:5000/m03-dotnet-api:latest -f dotnet-api/Dockerfile dotnet-api/
+docker push localhost:5000/m03-dotnet-api:latest
+```
+
+**Option 2 - Déployer sur K8s** :
+
+```bash
+# Créer le déploiement Java API (avec transactional producer)
+cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m03-java-api
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m03-java-api
+  template:
+    metadata:
+      labels:
+        app: m03-java-api
+    spec:
+      containers:
+      - name: java-api
+        image: localhost:5000/m03-java-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bhf-kafka-kafka-bootstrap.kafka.svc:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m03-java-api
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 31090
+  selector:
+    app: m03-java-api
+EOF
+```
+
+**Vérification** :
+
+```bash
+kubectl get pods -n kafka -l app=m03-java-api
+kubectl get svc m03-java-api -n kafka
+```
+
+</details>
 
 ---
 
@@ -724,6 +842,9 @@ Exécuter le script de validation complet.
 
 **Objectif** : Valider automatiquement le comportement `read_committed`.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 **Explication** : Le script `validate.sh` :
 
 1. Crée un topic temporaire
@@ -740,9 +861,33 @@ Exécuter le script de validation complet.
 
 **Résultat attendu** :
 
-```
+```text
 OK
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Explication** : En mode K8s, le script valide le comportement `read_committed` via les APIs déployées sur le cluster.
+
+**Commande** :
+
+```bash
+./day-01-foundations/module-03-consumer-read-committed/scripts/validate.sh --k8s
+```
+
+**Résultat attendu** :
+
+```text
+Running validation in K8s mode...
+OK
+```
+
+> **Note** : Si les APIs ne sont pas déployées sur K8s, le script validera uniquement le cluster Kafka.
+
+</details>
 
 **✅ Checkpoint 03.3** : Le script de validation retourne OK.
 
