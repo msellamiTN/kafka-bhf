@@ -19,9 +19,17 @@
 
 ## 📖 Partie Théorique
 
+> 💡 **Approche pédagogique** : Ce module combine théorie et pratique. Chaque concept est illustré par des diagrammes, des cas d'usage réels et des exercices pratiques.
+
 ### 1. Qu'est-ce que Apache Kafka ?
 
-**Apache Kafka** est une plateforme de streaming distribuée open-source, initialement développée par LinkedIn et maintenant maintenue par la Apache Software Foundation.
+**Apache Kafka** est une plateforme de streaming distribuée open-source, initialement développée par LinkedIn et maintenant maintenue par la Apache Software Foundation. C'est le **système nerveux central** des architectures microservices modernes.
+
+#### 🎯 Pourquoi Kafka est essentiel pour les microservices ?
+
+![Architecture Event-Driven](./assets/kafka-event-driven-architecture.svg)
+
+> **Scénario réel** : Imaginez un site e-commerce avec des services Order, Payment, Inventory et Notification. Sans Kafka, chaque service doit connaître et appeler directement les autres. Avec Kafka, ils communiquent via des événements, totalement découplés.
 
 #### Cas d'usage principaux
 
@@ -56,9 +64,201 @@ mindmap
 | **Tolérance aux pannes** | Réplication automatique, failover |
 | **Ordre garanti** | Au sein d'une partition |
 
+#### 🆚 Kafka vs Message Queues Traditionnels
+
+![Kafka vs MQ](./assets/kafka-vs-traditional-mq.svg)
+
+> **Point clé** : Contrairement aux MQ traditionnels (RabbitMQ, ActiveMQ) où les messages sont supprimés après lecture, Kafka conserve les messages. Cela permet le **replay**, l'**event sourcing** et la lecture par **plusieurs consumers indépendants**.
+
 ---
 
-### 2. Architecture de Kafka
+### 2. Bénéfices de Kafka pour les Microservices
+
+![Bénéfices Kafka](./assets/kafka-benefits.svg)
+
+#### Tableau comparatif détaillé
+
+| Critère | Sans Kafka (Appels REST) | Avec Kafka (Event-Driven) |
+|---------|--------------------------|---------------------------|
+| **Couplage** | Fort (services se connaissent) | Faible (via événements) |
+| **Disponibilité** | Si un service tombe, tout s'arrête | Les événements sont persistés |
+| **Scalabilité** | Chaque service doit gérer la charge | Kafka absorbe les pics |
+| **Historique** | Pas de trace | Replay possible |
+| **Ajout de features** | Modifier plusieurs services | Ajouter un consumer |
+
+#### Exemple concret : E-commerce
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant OrderService
+    participant Kafka
+    participant PaymentService
+    participant InventoryService
+    participant NotificationService
+    participant AnalyticsService
+
+    Client->>OrderService: POST /orders
+    OrderService->>Kafka: Publish "OrderCreated"
+    
+    par Traitement parallèle
+        Kafka-->>PaymentService: Consume "OrderCreated"
+        PaymentService->>Kafka: Publish "PaymentProcessed"
+    and
+        Kafka-->>InventoryService: Consume "OrderCreated"
+        InventoryService->>Kafka: Publish "StockReserved"
+    and
+        Kafka-->>AnalyticsService: Consume "OrderCreated"
+        Note right of AnalyticsService: Mise à jour KPIs
+    end
+    
+    Kafka-->>NotificationService: Consume "PaymentProcessed"
+    NotificationService->>Client: Email "Commande confirmée"
+```
+
+> **Avantage** : Chaque service est **indépendant**. Ajouter un service Fraud Detection ? Il suffit de s'abonner au topic `orders` !
+
+---
+
+### 3. Patterns Microservices avec Kafka
+
+![Patterns Microservices](./assets/kafka-microservices-patterns.svg)
+
+#### 🔄 Pattern 1 : Saga (Transactions Distribuées)
+
+Gestion des transactions multi-services sans 2PC (Two-Phase Commit).
+
+```mermaid
+flowchart LR
+    subgraph "Saga Orchestrée"
+        O[Order Service] -->|1. Create| Kafka1[📨 order-events]
+        Kafka1 -->|2. Reserve| P[Payment Service]
+        P -->|3. Confirm| Kafka2[📨 payment-events]
+        Kafka2 -->|4. Ship| S[Shipping Service]
+    end
+    
+    subgraph "Compensation (si échec)"
+        S -.->|❌ Échec| Kafka3[📨 compensation]
+        Kafka3 -.->|Refund| P
+        Kafka3 -.->|Cancel| O
+    end
+```
+
+**Cas d'usage** : E-commerce, réservation de voyage, workflow bancaire
+
+#### 📊 Pattern 2 : CQRS (Command Query Responsibility Segregation)
+
+Séparation des modèles de lecture et d'écriture pour des performances optimales.
+
+```mermaid
+flowchart TB
+    subgraph "Write Side"
+        API[API] -->|Commands| WS[Write Service]
+        WS -->|Events| Kafka[📨 Kafka]
+    end
+    
+    subgraph "Read Side"
+        Kafka -->|Sync| RS1[Read Service 1<br/>PostgreSQL]
+        Kafka -->|Sync| RS2[Read Service 2<br/>Elasticsearch]
+        Kafka -->|Sync| RS3[Read Service 3<br/>Redis Cache]
+    end
+    
+    Client -->|Queries| RS1
+    Client -->|Search| RS2
+    Client -->|Fast Read| RS3
+```
+
+**Cas d'usage** : Reporting temps réel, dashboards, recherche full-text
+
+#### 📜 Pattern 3 : Event Sourcing
+
+L'état est reconstruit à partir de l'historique des événements.
+
+```mermaid
+flowchart LR
+    subgraph "Event Store (Kafka)"
+        E1[AccountCreated<br/>+1000€]
+        E2[MoneyDeposited<br/>+500€]
+        E3[MoneyWithdrawn<br/>-200€]
+        E4[MoneyTransferred<br/>-300€]
+    end
+    
+    E1 --> E2 --> E3 --> E4
+    
+    E4 -->|Replay| State[État actuel<br/>Solde: 1000€]
+```
+
+**Avantages** :
+- ✅ Audit trail complet
+- ✅ Replay à n'importe quel point dans le temps
+- ✅ Debug facilité (qu'est-ce qui s'est passé ?)
+
+**Cas d'usage** : Finance, santé, conformité réglementaire
+
+#### 💀 Pattern 4 : Dead Letter Topic (DLT)
+
+Gestion robuste des erreurs avec retry et quarantaine.
+
+```mermaid
+flowchart LR
+    Main[📨 main-topic] --> Consumer
+    Consumer -->|Success| Process[✅ Traitement OK]
+    Consumer -->|Retry 1,2,3| Retry[🔄 Retry Topic]
+    Retry -->|Max retries| DLT[💀 Dead Letter Topic]
+    DLT --> Manual[👤 Intervention manuelle]
+```
+
+**Configuration recommandée** :
+
+| Paramètre | Valeur | Description |
+|-----------|--------|-------------|
+| `max.retries` | 3 | Nombre de tentatives |
+| `retry.backoff.ms` | 1000 | Délai initial entre retries |
+| `backoff.multiplier` | 2 | Backoff exponentiel |
+
+#### 🏢 Cas d'usage par industrie
+
+```mermaid
+mindmap
+  root((Kafka par Industrie))
+    Finance
+      Trading temps réel
+      Détection de fraude
+      Réconciliation
+      Audit trail
+    E-commerce
+      Gestion des commandes
+      Recommandations
+      Inventaire temps réel
+      Notifications
+    IoT
+      Télémétrie
+      Alertes
+      Maintenance prédictive
+    Santé
+      Dossiers patients
+      Monitoring vital
+      Conformité HIPAA
+    Média
+      Streaming vidéo
+      Analytics engagement
+      Personnalisation
+```
+
+| Industrie | Cas d'usage principal | Patterns utilisés |
+|-----------|----------------------|-------------------|
+| **Finance** | Trading haute fréquence | Event Sourcing, CQRS |
+| **E-commerce** | Gestion des commandes | Saga, DLT |
+| **IoT** | Télémétrie capteurs | Stream Processing |
+| **Santé** | Dossiers patients | Event Sourcing, Audit |
+| **Télécoms** | Facturation temps réel | CDC, Stream Processing |
+| **Transport** | Tracking véhicules | Geo-partitioning |
+
+> 💡 **À retenir** : Kafka est utilisé par LinkedIn (7+ trillions msg/jour), Netflix, Uber, Airbnb, et des milliers d'entreprises pour des cas d'usage critiques.
+
+---
+
+### 4. Architecture de Kafka
 
 #### Vue d'ensemble
 
