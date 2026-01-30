@@ -712,6 +712,58 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka-connect|pos
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# Vérifier que le cluster Kafka est prêt
+kubectl get kafka -n kafka
+kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
+
+# Déployer Kafka Connect avec Strimzi (si nécessaire)
+kubectl apply -f - <<EOF
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: kafka-connect-banking
+  namespace: kafka
+spec:
+  version: 4.0.0
+  replicas: 1
+  bootstrapServers: bhf-kafka-bootstrap:9092
+  image: debezium/connect:2.5
+  config:
+    group.id: connect-cluster-banking
+    offset.storage.topic: connect-cluster-banking-offsets
+    config.storage.topic: connect-cluster-banking-configs
+    status.storage.topic: connect-cluster-banking-status
+    config.providers: file
+    config.providers.file.class: org.apache.kafka.common.config.provider.FileConfigProvider
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+EOF
+
+# Attendre que Kafka Connect soit prêt
+kubectl wait --for=condition=Ready kafkaconnect/kafka-connect-banking -n kafka --timeout=300s
+
+# Exposer Kafka Connect via NodePort
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect-banking
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8083
+    nodePort: 31083
+  selector:
+    strimzi.io/kind: KafkaConnect
+    strimzi.io/cluster: kafka-connect-banking
+EOF
+
 # Déployer PostgreSQL avec Helm
 helm install postgres-banking bitnami/postgresql \
   -n kafka \
@@ -761,6 +813,10 @@ spec:
   selector:
     app: sqlserver-banking
 EOF
+
+# Attendre que tous les services soient prêts
+kubectl wait --for=condition=Ready pod -l app=postgres-banking -n kafka --timeout=300s
+kubectl wait --for=condition=Ready pod -l app=sqlserver-banking -n kafka --timeout=300s
 ```
 
 </details>
@@ -787,8 +843,22 @@ docker exec -it postgres-banking psql -U banking -d core_banking -c "SELECT * FR
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# Vérifier que Kafka Connect est déployé
+kubectl get kafkaconnect -n kafka
+kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
+
+# Vérifier que PostgreSQL est prêt
+kubectl wait --for=condition=Ready pod -l app=postgres-banking -n kafka --timeout=60s
+kubectl get pods -n kafka -l app=postgres-banking
+
+# Connexion et vérification du schéma
 kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "\dt"
-kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name FROM customers;"
+
+# Vérifier les données clients
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name, customer_type FROM customers;"
+
+# Vérifier la publication CDC
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';"
 ```
 
 </details>
