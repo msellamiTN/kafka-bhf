@@ -719,7 +719,7 @@ kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 # Déployer Kafka Connect avec Strimzi (nécessaire pour le mode K8s)
 echo "🚀 Déploiement de Kafka Connect avec Debezium..."
 kubectl apply -f - <<EOF
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
   name: kafka-connect-banking
@@ -775,6 +775,10 @@ EOF
 echo "🔍 Vérification de l'accès à Kafka Connect..."
 sleep 10
 curl -s http://localhost:31083/connector-plugins | jq '.[].class' | head -5
+
+# Ajouter le repo Bitnami Helm (si nécessaire)
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
 
 # Déployer PostgreSQL avec Helm
 helm install postgres-banking bitnami/postgresql \
