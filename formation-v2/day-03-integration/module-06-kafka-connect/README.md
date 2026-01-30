@@ -330,8 +330,50 @@ EXEC sys.sp_cdc_help_change_data_capture;
 | Service | Port | Description |
 |---------|------|-------------|
 | Kafka Connect | 8083 | REST API |
+| PostgreSQL Banking | 5432 | Core Banking System |
+| SQL Server Banking | 1433 | Transaction Processing |
 | Kafka UI | 8080 | Interface web |
 | Kafka | 9092 | Broker |
+
+---
+
+## 🏦 Scénario Banking : Architecture CDC
+
+```mermaid
+flowchart TB
+    subgraph CoreBanking["🏦 Core Banking (PostgreSQL)"]
+        C["👤 Customers"]
+        A["💰 Accounts"]
+        T["📝 Transactions"]
+        TR["🔄 Transfers"]
+    end
+    
+    subgraph TxProcessing["💳 Transaction Processing (SQL Server)"]
+        CA["💳 Cards"]
+        CT["🧾 CardTransactions"]
+        FA["🚨 FraudAlerts"]
+        M["🏪 Merchants"]
+    end
+    
+    subgraph Debezium["🔌 Debezium CDC"]
+        PG["PostgreSQL Connector"]
+        SQL["SQL Server Connector"]
+    end
+    
+    subgraph Kafka["📦 Kafka Topics"]
+        T1["banking.postgres.*"]
+        T2["banking.sqlserver.*"]
+    end
+    
+    CoreBanking -->|WAL| PG
+    TxProcessing -->|CDC Tables| SQL
+    PG --> T1
+    SQL --> T2
+    
+    style CoreBanking fill:#336791,color:#fff
+    style TxProcessing fill:#cc2927,color:#fff
+    style Debezium fill:#e8f5e9
+```
 
 ---
 
@@ -643,14 +685,500 @@ curl -X DELETE http://localhost:8083/connectors/file-source
 
 ---
 
+## 🏦 Labs Banking : CDC avec PostgreSQL et SQL Server
+
+### Étape 7 - Lab 6 : Démarrer l'environnement Banking
+
+**Objectif** : Déployer PostgreSQL (Core Banking) et SQL Server (Transaction Processing) avec CDC activé.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Démarrer tous les services (Kafka Connect + Databases)
+docker compose -f day-03-integration/module-06-kafka-connect/docker-compose.module.yml up -d
+
+# Attendre l'initialisation (2-3 minutes)
+echo "Waiting for databases to initialize..."
+sleep 120
+
+# Vérifier les services
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka-connect|postgres|sqlserver)"
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Déployer PostgreSQL avec Helm
+helm install postgres-banking bitnami/postgresql \
+  -n kafka \
+  --set auth.username=banking \
+  --set auth.password=banking123 \
+  --set auth.database=core_banking \
+  --set primary.extendedConfiguration="wal_level=logical\nmax_replication_slots=4\nmax_wal_senders=4"
+
+# Déployer SQL Server
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqlserver-banking
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sqlserver-banking
+  template:
+    metadata:
+      labels:
+        app: sqlserver-banking
+    spec:
+      containers:
+      - name: sqlserver
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+        - name: ACCEPT_EULA
+          value: "Y"
+        - name: MSSQL_SA_PASSWORD
+          value: "BankingStr0ng!Pass"
+        ports:
+        - containerPort: 1433
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlserver-banking
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 1433
+    nodePort: 31433
+  selector:
+    app: sqlserver-banking
+EOF
+```
+
+</details>
+
+#### 7.1 Vérifier PostgreSQL
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Connexion et vérification du schéma
+docker exec -it postgres-banking psql -U banking -d core_banking -c "\dt"
+
+# Vérifier les données clients
+docker exec -it postgres-banking psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name, customer_type FROM customers;"
+
+# Vérifier la publication CDC
+docker exec -it postgres-banking psql -U banking -d core_banking -c "SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';"
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "\dt"
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name FROM customers;"
+```
+
+</details>
+
+#### 7.2 Vérifier SQL Server
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Vérifier les tables CDC
+docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "USE transaction_banking; SELECT name, is_tracked_by_cdc FROM sys.tables WHERE is_tracked_by_cdc = 1;"
+
+# Vérifier les cartes
+docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "USE transaction_banking; SELECT CardNumber, CardholderName, CardType, Status FROM Cards;"
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "USE transaction_banking; SELECT name, is_tracked_by_cdc FROM sys.tables WHERE is_tracked_by_cdc = 1;"
+```
+
+</details>
+
+---
+
+### Étape 8 - Lab 7 : Créer le connecteur PostgreSQL CDC
+
+**Objectif** : Capturer les changements du Core Banking System en temps réel.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Créer le connecteur Debezium PostgreSQL
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "postgres-banking-cdc",
+    "config": {
+      "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+      "database.hostname": "postgres-banking",
+      "database.port": "5432",
+      "database.user": "banking",
+      "database.password": "banking123",
+      "database.dbname": "core_banking",
+      "topic.prefix": "banking.postgres",
+      "plugin.name": "pgoutput",
+      "publication.name": "dbz_publication",
+      "slot.name": "debezium_slot",
+      "table.include.list": "public.customers,public.accounts,public.transactions,public.transfers",
+      "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "key.converter.schemas.enable": "false",
+      "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "value.converter.schemas.enable": "false",
+      "transforms": "unwrap",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.drop.tombstones": "false",
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "op,table,source.ts_ms",
+      "snapshot.mode": "initial"
+    }
+  }'
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST http://localhost:31083/connectors \
+  -H "Content-Type: application/json" \
+  -d @connectors/postgres-cdc-connector.json
+```
+
+</details>
+
+#### 8.1 Vérifier le connecteur PostgreSQL
+
+```bash
+# Statut du connecteur
+curl -s http://localhost:8083/connectors/postgres-banking-cdc/status | jq
+
+# Topics créés
+docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep banking.postgres
+```
+
+**Topics attendus** :
+- `banking.postgres.public.customers`
+- `banking.postgres.public.accounts`
+- `banking.postgres.public.transactions`
+- `banking.postgres.public.transfers`
+
+#### 8.2 Consommer les événements CDC PostgreSQL
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Voir les clients capturés lors du snapshot initial
+docker exec kafka kafka-console-consumer \
+  --topic banking.postgres.public.customers \
+  --from-beginning \
+  --max-messages 5 \
+  --bootstrap-server localhost:9092
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic banking.postgres.public.customers --from-beginning --max-messages 5
+```
+
+</details>
+
+---
+
+### Étape 9 - Lab 8 : Créer le connecteur SQL Server CDC
+
+**Objectif** : Capturer les transactions carte et alertes fraude en temps réel.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Créer le connecteur Debezium SQL Server
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "sqlserver-banking-cdc",
+    "config": {
+      "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+      "database.hostname": "sqlserver-banking",
+      "database.port": "1433",
+      "database.user": "sa",
+      "database.password": "BankingStr0ng!Pass",
+      "database.names": "transaction_banking",
+      "topic.prefix": "banking.sqlserver",
+      "table.include.list": "dbo.Cards,dbo.CardTransactions,dbo.FraudAlerts,dbo.Merchants",
+      "database.encrypt": "false",
+      "database.trustServerCertificate": "true",
+      "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+      "schema.history.internal.kafka.topic": "schema-changes.sqlserver",
+      "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "key.converter.schemas.enable": "false",
+      "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "value.converter.schemas.enable": "false",
+      "transforms": "unwrap",
+      "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+      "transforms.unwrap.drop.tombstones": "false",
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "op,table,source.ts_ms",
+      "snapshot.mode": "initial"
+    }
+  }'
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST http://localhost:31083/connectors \
+  -H "Content-Type: application/json" \
+  -d @connectors/sqlserver-cdc-connector.json
+```
+
+</details>
+
+#### 9.1 Vérifier le connecteur SQL Server
+
+```bash
+# Statut du connecteur
+curl -s http://localhost:8083/connectors/sqlserver-banking-cdc/status | jq
+
+# Topics créés
+docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep banking.sqlserver
+```
+
+**Topics attendus** :
+- `banking.sqlserver.transaction_banking.dbo.Cards`
+- `banking.sqlserver.transaction_banking.dbo.CardTransactions`
+- `banking.sqlserver.transaction_banking.dbo.FraudAlerts`
+- `banking.sqlserver.transaction_banking.dbo.Merchants`
+
+---
+
+### Étape 10 - Lab 9 : Simuler des opérations bancaires
+
+**Objectif** : Observer le CDC en action avec des modifications de données.
+
+#### 10.1 Créer un nouveau client (PostgreSQL)
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Insérer un nouveau client
+docker exec -it postgres-banking psql -U banking -d core_banking -c "
+INSERT INTO customers (customer_number, first_name, last_name, email, customer_type, kyc_status)
+VALUES ('CUST-NEW-001', 'Alice', 'Wonderland', 'alice@bank.fr', 'VIP', 'VERIFIED');
+"
+
+# Observer l'événement CDC
+docker exec kafka kafka-console-consumer \
+  --topic banking.postgres.public.customers \
+  --from-beginning \
+  --max-messages 10 \
+  --bootstrap-server localhost:9092 | tail -1 | jq
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "
+INSERT INTO customers (customer_number, first_name, last_name, email, customer_type, kyc_status)
+VALUES ('CUST-NEW-001', 'Alice', 'Wonderland', 'alice@bank.fr', 'VIP', 'VERIFIED');
+"
+```
+
+</details>
+
+#### 10.2 Effectuer un virement (PostgreSQL)
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Créer un transfert entre comptes
+docker exec -it postgres-banking psql -U banking -d core_banking -c "
+INSERT INTO transfers (transfer_reference, from_account_id, to_account_id, amount, status, description)
+SELECT 
+  'TRF-' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS'),
+  (SELECT account_id FROM accounts WHERE account_number = 'FR7612345000010001234567890'),
+  (SELECT account_id FROM accounts WHERE account_number = 'FR7612345000010001234567892'),
+  500.00,
+  'COMPLETED',
+  'Virement entre comptes';
+"
+
+# Observer l'événement
+docker exec kafka kafka-console-consumer \
+  --topic banking.postgres.public.transfers \
+  --from-beginning \
+  --bootstrap-server localhost:9092 --max-messages 5
+```
+
+</details>
+
+#### 10.3 Simuler une transaction carte (SQL Server)
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Nouvelle transaction carte
+docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "
+USE transaction_banking;
+DECLARE @CardId UNIQUEIDENTIFIER = (SELECT TOP 1 CardId FROM Cards WHERE CardNumber = '4532XXXXXXXX1234');
+INSERT INTO CardTransactions (TransactionReference, CardId, TransactionType, Amount, MerchantName, MerchantCategory, MerchantCity, MerchantCountry, AuthorizationCode, ResponseCode, Status, Channel)
+VALUES ('TXN-LIVE-001', @CardId, 'PURCHASE', 89.99, 'Fnac Paris', '5732', 'Paris', 'FRA', 'AUTH999', '00', 'APPROVED', 'CONTACTLESS');
+"
+
+# Observer l'événement CDC
+docker exec kafka kafka-console-consumer \
+  --topic banking.sqlserver.transaction_banking.dbo.CardTransactions \
+  --from-beginning \
+  --bootstrap-server localhost:9092 --max-messages 10 | tail -1 | jq
+```
+
+</details>
+
+#### 10.4 Déclencher une alerte fraude (SQL Server)
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Créer une alerte fraude
+docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "
+USE transaction_banking;
+DECLARE @TxId UNIQUEIDENTIFIER = (SELECT TOP 1 TransactionId FROM CardTransactions ORDER BY CreatedAt DESC);
+DECLARE @CardId UNIQUEIDENTIFIER = (SELECT TOP 1 CardId FROM CardTransactions ORDER BY CreatedAt DESC);
+INSERT INTO FraudAlerts (TransactionId, CardId, AlertType, RiskLevel, Description, Status)
+VALUES (@TxId, @CardId, 'UNUSUAL_LOCATION', 'HIGH', 'Transaction from unusual location detected', 'OPEN');
+"
+
+# Observer les alertes fraude
+docker exec kafka kafka-console-consumer \
+  --topic banking.sqlserver.transaction_banking.dbo.FraudAlerts \
+  --from-beginning \
+  --bootstrap-server localhost:9092 --max-messages 5
+```
+
+</details>
+
+---
+
+### Étape 11 - Lab 10 : Monitoring des connecteurs
+
+#### 11.1 Tableau de bord des connecteurs
+
+```bash
+# Liste de tous les connecteurs
+curl -s http://localhost:8083/connectors | jq
+
+# Statut détaillé
+for connector in $(curl -s http://localhost:8083/connectors | jq -r '.[]'); do
+  echo "=== $connector ==="
+  curl -s http://localhost:8083/connectors/$connector/status | jq '{name: .name, state: .connector.state, tasks: [.tasks[].state]}'
+done
+```
+
+#### 11.2 Métriques des topics CDC
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
+```bash
+# Nombre de messages par topic
+for topic in $(docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep banking); do
+  count=$(docker exec kafka kafka-run-class kafka.tools.GetOffsetShell \
+    --broker-list localhost:9092 --topic $topic 2>/dev/null | awk -F: '{sum+=$3} END {print sum}')
+  echo "$topic: $count messages"
+done
+```
+
+</details>
+
+#### 11.3 Vérifier le lag de réplication
+
+```bash
+# Consumer groups CDC
+docker exec kafka kafka-consumer-groups --list --bootstrap-server localhost:9092 | grep connect
+
+# Lag détaillé
+docker exec kafka kafka-consumer-groups \
+  --describe \
+  --group connect-postgres-banking-cdc \
+  --bootstrap-server localhost:9092
+```
+
+---
+
 ## ✅ Checkpoint de validation
 
+### Labs basiques (File Connector)
 - [ ] Kafka Connect démarré et accessible sur :8083
 - [ ] Source connector créé et RUNNING
 - [ ] Messages visibles dans le topic file-topic
 - [ ] Sink connector créé et écrit dans le fichier
 - [ ] Données en temps réel propagées
 - [ ] Connecteurs gérables via REST API
+
+### Labs Banking (CDC)
+- [ ] PostgreSQL démarré avec schéma core_banking
+- [ ] SQL Server démarré avec schéma transaction_banking
+- [ ] CDC activé sur les deux bases de données
+- [ ] Connecteur PostgreSQL CDC créé et RUNNING
+- [ ] Connecteur SQL Server CDC créé et RUNNING
+- [ ] Topics banking.postgres.* créés
+- [ ] Topics banking.sqlserver.* créés
+- [ ] Événements INSERT/UPDATE capturés en temps réel
+- [ ] Alertes fraude visibles dans Kafka
 
 ---
 
@@ -676,14 +1204,36 @@ docker logs kafka-connect --tail 100 | grep -i error
 
 ## 🧹 Nettoyage
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Supprimer les connecteurs
 curl -X DELETE http://localhost:8083/connectors/file-source
 curl -X DELETE http://localhost:8083/connectors/file-sink
+curl -X DELETE http://localhost:8083/connectors/postgres-banking-cdc
+curl -X DELETE http://localhost:8083/connectors/sqlserver-banking-cdc
 
-# Arrêter le module
-docker compose -f day-03-integration/module-06-kafka-connect/docker-compose.module.yml down
+# Arrêter le module (avec volumes pour supprimer les données)
+docker compose -f day-03-integration/module-06-kafka-connect/docker-compose.module.yml down -v
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Supprimer les connecteurs
+curl -X DELETE http://localhost:31083/connectors/postgres-banking-cdc
+curl -X DELETE http://localhost:31083/connectors/sqlserver-banking-cdc
+
+# Supprimer les déploiements
+kubectl delete deployment postgres-banking sqlserver-banking -n kafka
+kubectl delete svc postgres-banking sqlserver-banking -n kafka
+```
+
+</details>
 
 ---
 
