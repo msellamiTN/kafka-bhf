@@ -1060,6 +1060,32 @@ docker exec kafka kafka-console-consumer \
 
 </details>
 
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Créer un transfert entre comptes
+kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "
+INSERT INTO transfers (transfer_reference, from_account_id, to_account_id, amount, status, description)
+SELECT 
+  'TRF-' || TO_CHAR(NOW(), 'YYYYMMDDHH24MISS'),
+  (SELECT account_id FROM accounts WHERE account_number = 'FR7612345000010001234567890'),
+  (SELECT account_id FROM accounts WHERE account_number = 'FR7612345000010001234567892'),
+  500.00,
+  'COMPLETED',
+  'Virement entre comptes';
+"
+
+# Observer l'événement
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic banking.postgres.public.transfers --from-beginning --max-messages 5
+```
+
+</details>
+
 #### 10.3 Simuler une transaction carte (SQL Server)
 
 <details>
@@ -1081,6 +1107,30 @@ docker exec kafka kafka-console-consumer \
   --topic banking.sqlserver.transaction_banking.dbo.CardTransactions \
   --from-beginning \
   --bootstrap-server localhost:9092 --max-messages 10 | tail -1 | jq
+```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Nouvelle transaction carte
+kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "
+USE transaction_banking;
+DECLARE @CardId UNIQUEIDENTIFIER = (SELECT TOP 1 CardId FROM Cards WHERE CardNumber = '4532XXXXXXXX1234');
+INSERT INTO CardTransactions (TransactionReference, CardId, TransactionType, Amount, MerchantName, MerchantCategory, MerchantCity, MerchantCountry, AuthorizationCode, ResponseCode, Status, Channel)
+VALUES ('TXN-LIVE-001', @CardId, 'PURCHASE', 89.99, 'Fnac Paris', '5732', 'Paris', 'FRA', 'AUTH999', '00', 'APPROVED', 'CONTACTLESS');
+"
+
+# Observer l'événement CDC
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic banking.sqlserver.transaction_banking.dbo.CardTransactions --from-beginning --max-messages 10
 ```
 
 </details>
@@ -1111,11 +1161,39 @@ docker exec kafka kafka-console-consumer \
 
 </details>
 
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Créer une alerte fraude
+kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
+  -Q "
+USE transaction_banking;
+DECLARE @TxId UNIQUEIDENTIFIER = (SELECT TOP 1 TransactionId FROM CardTransactions ORDER BY CreatedAt DESC);
+DECLARE @CardId UNIQUEIDENTIFIER = (SELECT TOP 1 CardId FROM CardTransactions ORDER BY CreatedAt DESC);
+INSERT INTO FraudAlerts (TransactionId, CardId, AlertType, RiskLevel, Description, Status)
+VALUES (@TxId, @CardId, 'UNUSUAL_LOCATION', 'HIGH', 'Transaction from unusual location detected', 'OPEN');
+"
+
+# Observer les alertes fraude
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic banking.sqlserver.transaction_banking.dbo.FraudAlerts --from-beginning --max-messages 5
+```
+
+</details>
+
 ---
 
 ### Étape 11 - Lab 10 : Monitoring des connecteurs
 
 #### 11.1 Tableau de bord des connecteurs
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Liste de tous les connecteurs
@@ -1127,6 +1205,24 @@ for connector in $(curl -s http://localhost:8083/connectors | jq -r '.[]'); do
   curl -s http://localhost:8083/connectors/$connector/status | jq '{name: .name, state: .connector.state, tasks: [.tasks[].state]}'
 done
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Liste de tous les connecteurs
+curl -s http://localhost:31083/connectors | jq
+
+# Statut détaillé
+for connector in $(curl -s http://localhost:31083/connectors | jq -r '.[]'); do
+  echo "=== $connector ==="
+  curl -s http://localhost:31083/connectors/$connector/status | jq '{name: .name, state: .connector.state, tasks: [.tasks[].state]}'
+done
+```
+
+</details>
 
 #### 11.2 Métriques des topics CDC
 
@@ -1144,7 +1240,35 @@ done
 
 </details>
 
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Nombre de messages par topic
+kubectl run kafka-topics --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-topics.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --list | grep banking
+
+# Pour chaque topic, compter les messages
+for topic in $(kubectl run kafka-topics --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-topics.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --list | grep banking); do
+  echo "Counting messages for $topic..."
+  kubectl run kafka-offsets --rm -it --restart=Never \
+    --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+    -n kafka -- bin/kafka-run-class.sh kafka.tools.GetOffsetShell \
+    --broker-list bhf-kafka-kafka-bootstrap:9092 --topic $topic
+done
+```
+
+</details>
+
 #### 11.3 Vérifier le lag de réplication
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Consumer groups CDC
@@ -1156,6 +1280,29 @@ docker exec kafka kafka-consumer-groups \
   --group connect-postgres-banking-cdc \
   --bootstrap-server localhost:9092
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Consumer groups CDC
+kubectl run kafka-consumer-groups --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-consumer-groups.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --list | grep connect
+
+# Lag détaillé
+kubectl run kafka-consumer-groups --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-consumer-groups.sh \
+  --describe \
+  --group connect-postgres-banking-cdc \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092
+```
+
+</details>
 
 ---
 
