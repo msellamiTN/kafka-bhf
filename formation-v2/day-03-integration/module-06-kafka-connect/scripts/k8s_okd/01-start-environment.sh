@@ -20,7 +20,7 @@ spec:
   version: 4.0.0
   replicas: 1
   bootstrapServers: bhf-kafka-bootstrap:9092
-  image: debezium/connect:2.5
+  image: debezium/connect:2.5.Final
   groupId: connect-cluster-banking
   offsetStorageTopic: connect-cluster-banking-offsets
   configStorageTopic: connect-cluster-banking-configs
@@ -75,7 +75,7 @@ helm repo update
 
 # Déployer PostgreSQL avec Helm
 echo "🐘 Déploiement de PostgreSQL..."
-helm install postgres-banking bitnami/postgresql \
+helm upgrade --install postgres-banking bitnami/postgresql \
   -n kafka \
   --set auth.username=banking \
   --set auth.password=banking123 \
