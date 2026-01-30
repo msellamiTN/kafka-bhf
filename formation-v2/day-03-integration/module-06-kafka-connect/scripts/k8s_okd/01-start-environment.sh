@@ -127,14 +127,14 @@ EOF
 
 # Attendre que tous les services soient prêts
 echo "⏳ Attente de PostgreSQL..."
-kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=postgres-banking -n kafka --timeout=300s
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=postgres-banking -n kafka --timeout=300s
 
 echo "⏳ Attente de SQL Server..."
 kubectl wait --for=condition=Ready pod -l app=sqlserver-banking -n kafka --timeout=300s
 
 # Vérifier l'état final
 echo "🔍 État des déploiements:"
-kubectl get pods -n kafka -l app.kubernetes.io/name=postgres-banking
+kubectl get pods -n kafka -l app.kubernetes.io/instance=postgres-banking
 kubectl get pods -n kafka -l app=sqlserver-banking
 kubectl get kafkaconnect -n kafka
 
