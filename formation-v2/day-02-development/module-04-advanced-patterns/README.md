@@ -458,6 +458,9 @@ orders.retry
 
 **Objectif** : Vérifier le flux normal sans erreur.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Envoyer 5 messages valides
 for i in {1..5}; do
@@ -474,6 +477,33 @@ done
 2. Cliquez sur **Topics** → **orders**
 3. Vérifiez que 5 messages sont présents
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Envoyer 5 messages valides (NodePort 31082)
+for i in {1..5}; do
+  curl -X POST "http://localhost:31082/api/v1/orders" \
+    -H "Content-Type: application/json" \
+    -d "{\"orderId\": \"ORD-$i\", \"amount\": $((i * 100)), \"status\": \"PENDING\"}"
+  echo ""
+done
+```
+
+**Vérification via kubectl** :
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic orders --from-beginning --max-messages 5
+```
+
+</details>
+
 ---
 
 ### Étape 4 - Lab 2 : Simulation d'erreurs et DLT
@@ -482,15 +512,34 @@ done
 
 #### 4.1 Envoyer un message invalide (montant négatif)
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -X POST "http://localhost:18082/api/v1/orders" \
   -H "Content-Type: application/json" \
   -d '{"orderId": "ORD-INVALID", "amount": -50, "status": "PENDING"}'
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST "http://localhost:31082/api/v1/orders" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "ORD-INVALID", "amount": -50, "status": "PENDING"}'
+```
+
+</details>
+
 **Résultat attendu** : Le message est rejeté et envoyé au DLT.
 
 #### 4.2 Vérifier le DLT
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker exec kafka kafka-console-consumer \
@@ -499,6 +548,21 @@ docker exec kafka kafka-console-consumer \
   --max-messages 1 \
   --bootstrap-server localhost:9092
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic orders.dlt --from-beginning --max-messages 1
+```
+
+</details>
 
 **Résultat attendu** : Message avec métadonnées d'erreur.
 
@@ -510,11 +574,28 @@ docker exec kafka kafka-console-consumer \
 
 #### 5.1 Activer le mode "erreur transitoire"
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -X POST "http://localhost:18082/api/v1/config/simulate-transient-error?enabled=true"
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST "http://localhost:31082/api/v1/config/simulate-transient-error?enabled=true"
+```
+
+</details>
+
 #### 5.2 Envoyer un message
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -X POST "http://localhost:18082/api/v1/orders" \
@@ -522,19 +603,60 @@ curl -X POST "http://localhost:18082/api/v1/orders" \
   -d '{"orderId": "ORD-RETRY", "amount": 200, "status": "PENDING"}'
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST "http://localhost:31082/api/v1/orders" \
+  -H "Content-Type: application/json" \
+  -d '{"orderId": "ORD-RETRY", "amount": 200, "status": "PENDING"}'
+```
+
+</details>
+
 #### 5.3 Observer les logs
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker logs m04-java-api --tail 50 | grep -E "(Retry|attempt|DLT)"
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl logs -n kafka -l app=m04-java-api --tail 50 | grep -E "(Retry|attempt|DLT)"
+```
+
+</details>
+
 **Résultat attendu** : Plusieurs tentatives avant succès ou DLT.
 
 #### 5.4 Désactiver le mode erreur
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -X POST "http://localhost:18082/api/v1/config/simulate-transient-error?enabled=false"
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST "http://localhost:31082/api/v1/config/simulate-transient-error?enabled=false"
+```
+
+</details>
 
 ---
 
@@ -544,19 +666,50 @@ curl -X POST "http://localhost:18082/api/v1/config/simulate-transient-error?enab
 
 #### 6.1 Démarrer un second consumer
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 docker compose -f day-02-development/module-04-advanced-patterns/docker-compose.module.yml \
   up -d --scale dotnet-consumer=2
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl scale deployment m04-java-api -n kafka --replicas=2
+```
+
+</details>
+
 #### 6.2 Observer les logs de rebalancing
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker logs m04-dotnet-consumer-1 --tail 20 | grep -i rebalance
 docker logs m04-dotnet-consumer-2 --tail 20 | grep -i rebalance
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl logs -n kafka -l app=m04-java-api --tail 20 | grep -i rebalance
+```
+
+</details>
+
 #### 6.3 Envoyer des messages pendant le rebalancing
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 for i in {1..10}; do
@@ -566,11 +719,40 @@ for i in {1..10}; do
 done
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+for i in {1..10}; do
+  curl -X POST "http://localhost:31082/api/v1/orders" \
+    -H "Content-Type: application/json" \
+    -d "{\"orderId\": \"ORD-REBAL-$i\", \"amount\": 100, \"status\": \"PENDING\"}"
+done
+```
+
+</details>
+
 #### 6.4 Arrêter un consumer pour déclencher un rebalancing
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 docker stop m04-dotnet-consumer-2
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl scale deployment m04-java-api -n kafka --replicas=1
+```
+
+</details>
 
 **Observer** : Les logs du consumer 1 montrent la réassignation des partitions.
 
@@ -579,6 +761,9 @@ docker stop m04-dotnet-consumer-2
 ### Étape 7 - Lab 5 : Monitoring des erreurs
 
 **Objectif** : Utiliser les endpoints de monitoring.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Statistiques des erreurs
@@ -590,6 +775,24 @@ curl -s http://localhost:18082/api/v1/dlt/count
 # Health check
 curl -s http://localhost:18082/health
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Statistiques des erreurs (NodePort 31082)
+curl -s http://localhost:31082/api/v1/stats | jq
+
+# Messages dans le DLT
+curl -s http://localhost:31082/api/v1/dlt/count
+
+# Health check
+curl -s http://localhost:31082/health
+```
+
+</details>
 
 ---
 

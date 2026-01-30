@@ -395,9 +395,24 @@ curl -s http://localhost:8083/ | jq
 
 ### Étape 2 - Lab 1 : Lister les plugins disponibles
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -s http://localhost:8083/connector-plugins | jq '.[].class'
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Via le Service NodePort Kafka Connect (31083)
+curl -s http://localhost:31083/connector-plugins | jq '.[].class'
+```
+
+</details>
 
 **Résultat attendu** : Liste des connecteurs disponibles (FileStreamSource, FileStreamSink, etc.)
 
@@ -417,6 +432,9 @@ docker exec kafka-connect sh -c 'echo "Line 3" >> /tmp/source-data.txt'
 
 #### 3.2 Créer le connecteur
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
@@ -431,11 +449,46 @@ curl -X POST http://localhost:8083/connectors \
   }'
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST http://localhost:31083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "file-source",
+    "config": {
+      "connector.class": "FileStreamSource",
+      "tasks.max": "1",
+      "file": "/tmp/source-data.txt",
+      "topic": "file-topic"
+    }
+  }'
+```
+
+</details>
+
 #### 3.3 Vérifier le statut
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -s http://localhost:8083/connectors/file-source/status | jq
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -s http://localhost:31083/connectors/file-source/status | jq
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -449,6 +502,9 @@ curl -s http://localhost:8083/connectors/file-source/status | jq
 
 #### 3.4 Vérifier les messages dans Kafka
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 docker exec kafka kafka-console-consumer \
   --topic file-topic \
@@ -457,11 +513,29 @@ docker exec kafka kafka-console-consumer \
   --bootstrap-server localhost:9092
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic file-topic --from-beginning --max-messages 3
+```
+
+</details>
+
 ---
 
 ### Étape 4 - Lab 3 : Créer un Sink Connector
 
 **Objectif** : Écrire les messages Kafka vers un fichier.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -X POST http://localhost:8083/connectors \
@@ -476,6 +550,27 @@ curl -X POST http://localhost:8083/connectors \
     }
   }'
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -X POST http://localhost:31083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "file-sink",
+    "config": {
+      "connector.class": "FileStreamSink",
+      "tasks.max": "1",
+      "file": "/tmp/sink-output.txt",
+      "topics": "file-topic"
+    }
+  }'
+```
+
+</details>
 
 **Vérifier le fichier de sortie** :
 
@@ -503,9 +598,23 @@ docker exec kafka-connect cat /tmp/sink-output.txt
 
 #### 6.1 Lister tous les connecteurs
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 curl -s http://localhost:8083/connectors | jq
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -s http://localhost:31083/connectors | jq
+```
+
+</details>
 
 #### 6.2 Obtenir la configuration
 

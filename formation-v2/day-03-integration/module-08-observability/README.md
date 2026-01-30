@@ -299,6 +299,9 @@ kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
 
 #### 2.1 Via Kafka CLI
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Consumer lag pour un groupe
 docker exec kafka kafka-consumer-groups \
@@ -306,6 +309,22 @@ docker exec kafka kafka-consumer-groups \
   --group orders-consumer-group \
   --bootstrap-server localhost:9092
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-cli --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-consumer-groups.sh \
+  --describe \
+  --group orders-consumer-group \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -330,7 +349,25 @@ docker exec kafka kafka-run-class kafka.tools.JmxTool \
 
 #### 3.1 Vérifier les targets
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 Ouvrez http://localhost:9090/targets
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+Ouvrez http://localhost:31090/targets (si Prometheus exposé via NodePort)
+
+Ou utilisez `kubectl port-forward`:
+
+```bash
+kubectl port-forward svc/prometheus -n monitoring 9090:9090
+```
+
+</details>
 
 **Targets attendus** :
 - `kafka-jmx-exporter` : UP
@@ -355,9 +392,30 @@ rate(kafka_server_brokertopicmetrics_bytesin_total[5m])
 
 #### 4.1 Accéder à Grafana
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 1. Ouvrez http://localhost:3000
 2. Login: `admin` / `admin`
 3. Changez le mot de passe si demandé
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+1. Ouvrez http://localhost:31030 (si Grafana exposé via NodePort)
+
+Ou utilisez `kubectl port-forward`:
+
+```bash
+kubectl port-forward svc/grafana -n monitoring 3000:3000
+```
+
+2. Login: `admin` / `admin`
+3. Changez le mot de passe si demandé
+
+</details>
 
 #### 4.2 Importer un dashboard
 
@@ -379,6 +437,9 @@ rate(kafka_server_brokertopicmetrics_bytesin_total[5m])
 
 #### 5.1 Créer du lag artificiellement
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Produire beaucoup de messages
 for i in {1..1000}; do
@@ -387,6 +448,24 @@ for i in {1..1000}; do
     --bootstrap-server localhost:9092
 done
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Utiliser un pod éphémère pour produire des messages
+kubectl run kafka-producer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-producer.sh \
+  --topic test-lag \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092
+
+# Puis entrez manuellement plusieurs messages
+```
+
+</details>
 
 #### 5.2 Observer le lag dans Grafana
 

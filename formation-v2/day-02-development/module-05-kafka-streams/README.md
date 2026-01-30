@@ -411,6 +411,9 @@ kubectl logs -n kafka -l app=m05-streams-app --tail 20
 
 #### 3.1 Charger les données de référence (produits)
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Ajouter des produits dans la KTable
 echo 'PROD-001:{"id":"PROD-001","name":"Laptop","category":"Electronics"}' | \
@@ -435,7 +438,33 @@ echo 'PROD-003:{"id":"PROD-003","name":"Book","category":"Books"}' | \
     --bootstrap-server localhost:9092
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Ajouter des produits via un pod éphémère
+kubectl run kafka-producer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-producer.sh \
+  --topic products \
+  --property "parse.key=true" \
+  --property "key.separator=:" \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092
+
+# Puis entrez les données:
+# PROD-001:{"id":"PROD-001","name":"Laptop","category":"Electronics"}
+# PROD-002:{"id":"PROD-002","name":"Phone","category":"Electronics"}
+# PROD-003:{"id":"PROD-003","name":"Book","category":"Books"}
+```
+
+</details>
+
 #### 3.2 Envoyer des événements de vente
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Via l'API
@@ -452,7 +481,32 @@ curl -X POST "http://localhost:18084/api/v1/sales" \
   -d '{"productId": "PROD-003", "quantity": 5, "unitPrice": 25.00}'
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Via l'API (NodePort 31084)
+curl -X POST "http://localhost:31084/api/v1/sales" \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "PROD-001", "quantity": 2, "unitPrice": 999.99}'
+
+curl -X POST "http://localhost:31084/api/v1/sales" \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "PROD-002", "quantity": 1, "unitPrice": 50.00}'
+
+curl -X POST "http://localhost:31084/api/v1/sales" \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "PROD-003", "quantity": 5, "unitPrice": 25.00}'
+```
+
+</details>
+
 #### 3.3 Vérifier les résultats
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Ventes filtrées (> 100€)
@@ -463,16 +517,46 @@ docker exec kafka kafka-console-consumer \
   --bootstrap-server localhost:9092
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic large-sales --from-beginning --max-messages 5
+```
+
+</details>
+
 ---
 
 ### Étape 4 - Lab 2 : Agrégation par produit
 
 **Objectif** : Compter les ventes totales par produit.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Observer les agrégations
 curl -s http://localhost:18084/api/v1/stats/by-product | jq
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Observer les agrégations (NodePort 31084)
+curl -s http://localhost:31084/api/v1/stats/by-product | jq
+```
+
+</details>
 
 **Résultat attendu** :
 
@@ -492,6 +576,9 @@ curl -s http://localhost:18084/api/v1/stats/by-product | jq
 
 #### 5.1 Générer un flux continu de ventes
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # Script de génération (30 secondes)
 for i in {1..10}; do
@@ -502,17 +589,51 @@ for i in {1..10}; do
 done
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# Script de génération (NodePort 31084)
+for i in {1..10}; do
+  curl -s -X POST "http://localhost:31084/api/v1/sales" \
+    -H "Content-Type: application/json" \
+    -d "{\"productId\": \"PROD-00$((RANDOM % 3 + 1))\", \"quantity\": $((RANDOM % 5 + 1)), \"unitPrice\": $((RANDOM % 100 + 10))}"
+  sleep 3
+done
+```
+
+</details>
+
 #### 5.2 Observer les agrégations par fenêtre
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 curl -s http://localhost:18084/api/v1/stats/per-minute | jq
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+curl -s http://localhost:31084/api/v1/stats/per-minute | jq
+```
+
+</details>
 
 ---
 
 ### Étape 6 - Lab 4 : Jointure Stream-Table
 
 **Objectif** : Enrichir les ventes avec les informations produit.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 ```bash
 # Consommer le topic enrichi
@@ -523,6 +644,21 @@ docker exec kafka kafka-console-consumer \
   --bootstrap-server localhost:9092
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+kubectl run kafka-consumer --rm -it --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-console-consumer.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
+  --topic enriched-sales --from-beginning --max-messages 5
+```
+
+</details>
+
 **Résultat attendu** : Chaque vente contient maintenant le nom et la catégorie du produit.
 
 ---
@@ -531,6 +667,9 @@ docker exec kafka kafka-console-consumer \
 
 **Objectif** : Requêter l'état local de Kafka Streams.
 
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
+
 ```bash
 # État du store local
 curl -s http://localhost:18084/api/v1/stores/sales-by-product/all | jq
@@ -538,6 +677,21 @@ curl -s http://localhost:18084/api/v1/stores/sales-by-product/all | jq
 # Requête par clé
 curl -s http://localhost:18084/api/v1/stores/sales-by-product/PROD-001 | jq
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+```bash
+# État du store local (NodePort 31084)
+curl -s http://localhost:31084/api/v1/stores/sales-by-product/all | jq
+
+# Requête par clé
+curl -s http://localhost:31084/api/v1/stores/sales-by-product/PROD-001 | jq
+```
+
+</details>
 
 ---
 
