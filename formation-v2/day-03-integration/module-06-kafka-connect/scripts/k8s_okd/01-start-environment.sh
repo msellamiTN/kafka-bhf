@@ -21,11 +21,11 @@ spec:
   replicas: 1
   bootstrapServers: bhf-kafka-bootstrap:9092
   image: debezium/connect:2.5
+  groupId: connect-cluster-banking
+  offsetStorageTopic: connect-cluster-banking-offsets
+  configStorageTopic: connect-cluster-banking-configs
+  statusStorageTopic: connect-cluster-banking-status
   config:
-    group.id: connect-cluster-banking
-    offset.storage.topic: connect-cluster-banking-offsets
-    config.storage.topic: connect-cluster-banking-configs
-    status.storage.topic: connect-cluster-banking-status
     config.providers: file
     config.providers.file.class: org.apache.kafka.common.config.provider.FileConfigProvider
   resources:
