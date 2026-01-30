@@ -716,7 +716,8 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka-connect|pos
 kubectl get kafka -n kafka
 kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 
-# Déployer Kafka Connect avec Strimzi (si nécessaire)
+# Déployer Kafka Connect avec Strimzi (nécessaire pour le mode K8s)
+echo "🚀 Déploiement de Kafka Connect avec Debezium..."
 kubectl apply -f - <<EOF
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaConnect
@@ -745,9 +746,15 @@ spec:
 EOF
 
 # Attendre que Kafka Connect soit prêt
+echo "⏳ Attente du déploiement de Kafka Connect..."
 kubectl wait --for=condition=Ready kafkaconnect/kafka-connect-banking -n kafka --timeout=300s
 
+# Vérifier le déploiement
+kubectl get kafkaconnect -n kafka
+kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
+
 # Exposer Kafka Connect via NodePort
+echo "🌐 Exposition de Kafka Connect via NodePort..."
 kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
@@ -763,6 +770,11 @@ spec:
     strimzi.io/kind: KafkaConnect
     strimzi.io/cluster: kafka-connect-banking
 EOF
+
+# Vérifier que le service est accessible
+echo "🔍 Vérification de l'accès à Kafka Connect..."
+sleep 10
+curl -s http://localhost:31083/connector-plugins | jq '.[].class' | head -5
 
 # Déployer PostgreSQL avec Helm
 helm install postgres-banking bitnami/postgresql \
