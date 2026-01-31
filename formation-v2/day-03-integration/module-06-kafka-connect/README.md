@@ -1691,7 +1691,11 @@ kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${PO
 # 1. Vérifier les logs
 kubectl logs kafka-connect-banking-connect-0 -n kafka
 
-# 2. Si problème d'image Debezium, utiliser Strimzi
+# 2. Utiliser le script de réparation automatique
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./00-fix-environment.sh
+
+# 3. Si problème d'image Debezium, utiliser Strimzi
 kubectl delete kafkaconnect kafka-connect-banking -n kafka
 kubectl apply -f - <<EOF
 apiVersion: kafka.strimzi.io/v1
@@ -1702,7 +1706,7 @@ metadata:
 spec:
   version: 4.0.0
   replicas: 1
-  bootstrapServers: bhf-kafka-bootstrap:9092
+  bootstrapServers: bhf-kafka-kafka-bootstrap:9092
   image: quay.io/strimzi/kafka:latest-kafka-4.0.0
   groupId: connect-cluster-banking
   offsetStorageTopic: connect-cluster-banking-offsets
@@ -1710,8 +1714,33 @@ spec:
   statusStorageTopic: connect-cluster-banking-status
 EOF
 
-# 3. Attendre le déploiement
+# 4. Attendre le déploiement
 kubectl wait --for=condition=Ready kafkaconnect/kafka-connect-banking -n kafka --timeout=300s
+```
+
+**Symptôme**: `Couldn't resolve server bhf-kafka-bootstrap:9092 from bootstrap.servers`
+
+**Cause**: Nom incorrect du serveur bootstrap dans la configuration Kafka Connect
+
+**Solution**: Le script de réparation utilise automatiquement le bon nom `bhf-kafka-kafka-bootstrap:9092`. Si vous configurez manuellement, assurez-vous d'utiliser:
+```yaml
+bootstrapServers: bhf-kafka-kafka-bootstrap:9092  # Correct
+# bootstrapServers: bhf-kafka-bootstrap:9092     # Incorrect - cause DNS resolution failure
+```
+
+**Symptôme**: `Failed to connect to localhost:31083` lors de la création de connecteurs
+
+**Solutions**:
+```bash
+# 1. Les scripts de création de connecteurs incluent maintenant une vérification automatique
+sudo ./04-create-postgres-connector.sh  # Vérifie et répare automatiquement Kafka Connect
+
+# 2. Vérification manuelle
+kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
+curl -s http://localhost:31083/connector-plugins | jq '.[].class' | head -3
+
+# 3. Si le pod n'est pas prêt, utiliser le script de réparation
+sudo ./00-fix-environment.sh
 ```
 
 ### Problèmes Helm PostgreSQL
