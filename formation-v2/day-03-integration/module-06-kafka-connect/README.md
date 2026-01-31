@@ -1018,6 +1018,20 @@ kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sql
 
 **Objectif** : Capturer les changements du Core Banking System en temps réel.
 
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./04-create-postgres-connector.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./04-create-postgres-connector.sh
+```
+
+#### 📋 Création Manuelle du Connecteur
+
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
 
@@ -1059,21 +1073,54 @@ curl -X POST http://localhost:8083/connectors \
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+sudo ./04-create-postgres-connector.sh
+
+# Si vous préférez le manuel :
 curl -X POST http://localhost:31083/connectors \
   -H "Content-Type: application/json" \
-  -d @connectors/postgres-cdc-connector.json
+  -d @../../connectors/postgres-cdc-connector.json
 ```
+
+**⚠️ Problèmes Courants et Solutions:**
+
+- **`Connection refused`**: Vérifiez que Kafka Connect est accessible sur le bon port (8083/31083)
+- **`database.password` incorrect**: Le script utilise les mots de passe depuis les secrets Kubernetes
+- **`publication not found`**: Assurez-vous que PostgreSQL a été initialisé avec le script 02-verify-postgresql.sh
 
 </details>
 
 #### 8.1 Vérifier le connecteur PostgreSQL
 
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
 ```bash
-# Statut du connecteur
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./07-monitor-connectors.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./07-monitor-connectors.sh
+```
+
+#### 📋 Vérification Manuelle
+
+```bash
+# Statut du connecteur (Docker)
 curl -s http://localhost:8083/connectors/postgres-banking-cdc/status | jq
 
-# Topics créés
+# Statut du connecteur (Kubernetes)
+curl -s http://localhost:31083/connectors/postgres-banking-cdc/status | jq
+
+# Topics créés (Docker)
 docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep banking.postgres
+
+# Topics créés (Kubernetes)
+kubectl run kafka-topics --rm -i --restart=Never \
+  --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
+  -n kafka -- bin/kafka-topics.sh \
+  --bootstrap-server bhf-kafka-kafka-bootstrap:9092 --list | grep banking.postgres
 ```
 
 **Topics attendus** :
@@ -1083,6 +1130,20 @@ docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | grep b
 - `banking.postgres.public.transfers`
 
 #### 8.2 Consommer les événements CDC PostgreSQL
+
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./06-simulate-banking-operations.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./06-simulate-banking-operations.sh
+```
+
+#### 📋 Consommation Manuelle
 
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
@@ -1094,6 +1155,14 @@ docker exec kafka kafka-console-consumer \
   --from-beginning \
   --max-messages 5 \
   --bootstrap-server localhost:9092
+
+# Simuler des opérations bancaires
+docker exec postgres-banking psql -U banking -d core_banking -c "
+INSERT INTO customers (first_name, last_name, email, phone, customer_type) 
+VALUES ('Alice', 'Martin', 'alice.martin@email.com', '+33-1-23456790', 'INDIVIDUAL');
+
+UPDATE accounts SET balance = balance + 100.00 WHERE account_number = 1;
+"
 ```
 
 </details>
@@ -1102,12 +1171,31 @@ docker exec kafka kafka-console-consumer \
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+sudo ./06-simulate-banking-operations.sh
+
+# Si vous préférez le manuel :
 kubectl run kafka-consumer --rm -it --restart=Never \
   --image=quay.io/strimzi/kafka:latest-kafka-4.0.0 \
   -n kafka -- bin/kafka-console-consumer.sh \
   --bootstrap-server bhf-kafka-kafka-bootstrap:9092 \
   --topic banking.postgres.public.customers --from-beginning --max-messages 5
+
+# Simuler des opérations bancaires
+POSTGRES_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.password}" | base64 -d)
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U banking -d core_banking -c \"
+INSERT INTO customers (first_name, last_name, email, phone, customer_type) 
+VALUES ('Alice', 'Martin', 'alice.martin@email.com', '+33-1-23456790', 'INDIVIDUAL');
+
+UPDATE accounts SET balance = balance + 100.00 WHERE account_number = 1;
+\""
 ```
+
+**⚠️ Problèmes Courants et Solutions:**
+
+- **`No topics found`**: Vérifiez que le connecteur est RUNNING et que PostgreSQL a été initialisé
+- **`Connection refused`**: Assurez-vous que Kafka Connect est accessible sur le bon port
+- **`Permission denied`**: Utilisez les scripts d'automatisation qui gèrent les permissions automatiquement
 
 </details>
 
@@ -1116,6 +1204,20 @@ kubectl run kafka-consumer --rm -it --restart=Never \
 ### Étape 9 - Lab 8 : Créer le connecteur SQL Server CDC
 
 **Objectif** : Capturer les transactions carte et alertes fraude en temps réel.
+
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./05-create-sqlserver-connector.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./05-create-sqlserver-connector.sh
+```
+
+#### 📋 Création Manuelle du Connecteur
 
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
@@ -1159,10 +1261,20 @@ curl -X POST http://localhost:8083/connectors \
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+sudo ./05-create-sqlserver-connector.sh
+
+# Si vous préférez le manuel :
 curl -X POST http://localhost:31083/connectors \
   -H "Content-Type: application/json" \
-  -d @connectors/sqlserver-cdc-connector.json
+  -d @../../connectors/sqlserver-cdc-connector.json
 ```
+
+**⚠️ Problèmes Courants et Solutions:**
+
+- **`Database 'transaction_banking' does not exist`**: Exécutez d'abord `./03-verify-sqlserver.sh`
+- **`Connection refused`**: Vérifiez que SQL Server est prêt et accessible sur le port 1433
+- **`CDC not enabled`**: Assurez-vous que CDC est activé sur les tables (vérifié par le script 03-verify-sqlserver.sh)
 
 </details>
 
