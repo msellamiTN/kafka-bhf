@@ -7,7 +7,7 @@ echo "===================================================="
 echo "🔧 Création du connecteur PostgreSQL..."
 curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" \
   localhost:31083/connectors \
-  -d @day-03-integration/module-06-kafka-connect/connectors/postgres-cdc-connector.json
+  -d @../../connectors/postgres-cdc-connector.json
 
 echo ""
 echo "⏳ Attente du démarrage du connecteur..."
