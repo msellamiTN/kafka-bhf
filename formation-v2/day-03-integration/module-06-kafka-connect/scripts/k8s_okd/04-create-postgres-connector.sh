@@ -5,7 +5,16 @@ echo "===================================================="
 
 # Vérifier que Kafka Connect est prêt
 echo "🔍 Vérification de Kafka Connect..."
-kubectl wait --for=condition=Ready pod -l strimzi.io/kind=KafkaConnect -n kafka --timeout=60s
+if ! kubectl wait --for=condition=Ready pod -l strimzi.io/kind=KafkaConnect -n kafka --timeout=60s; then
+    echo "❌ Kafka Connect pod non prêt - utilisation du script de réparation"
+    echo "🔧 Exécution du script de réparation de l'environnement..."
+    cd ../..
+    sudo ./scripts/k8s_okd/00-fix-environment.sh
+    cd scripts/k8s_okd
+    
+    echo "🔄 Nouvelle vérification du pod Kafka Connect..."
+    kubectl wait --for=condition=Ready pod -l strimzi.io/kind=KafkaConnect -n kafka --timeout=120s
+fi
 
 # Vérifier que le service est accessible
 echo "🌐 Test d'accès à Kafka Connect..."
@@ -19,6 +28,7 @@ else
     cd scripts/k8s_okd
     
     echo "🔄 Nouvelle tentative d'accès à Kafka Connect..."
+    sleep 10
     curl -s http://localhost:31083/connector-plugins | jq '.[].class' | head -3
 fi
 
