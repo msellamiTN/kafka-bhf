@@ -691,6 +691,22 @@ curl -X DELETE http://localhost:8083/connectors/file-source
 
 **Objectif** : Déployer PostgreSQL (Core Banking) et SQL Server (Transaction Processing) avec CDC activé.
 
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+Pour éviter les problèmes courants, utilisez les scripts d'automatisation qui gèrent tous les cas de figure:
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./01-start-environment.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./01-start-environment.sh
+```
+
+#### 📋 Étapes Manuelles (si vous préférez)
+
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
 
@@ -712,12 +728,18 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka-connect|pos
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
-# Vérifier que le cluster Kafka est prêt
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./01-start-environment.sh
+
+# Si vous préférez le manuel, suivez ces étapes attentivement :
+
+# 1. Vérifier que le cluster Kafka est prêt
 kubectl get kafka -n kafka
 kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 
-# Déployer Kafka Connect avec Strimzi (nécessaire pour le mode K8s)
-echo "🚀 Déploiement de Kafka Connect avec Debezium..."
+# 2. Déployer Kafka Connect avec Strimzi (version corrigée)
+echo "🚀 Déploiement de Kafka Connect avec Strimzi..."
 kubectl apply -f - <<EOF
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
@@ -728,12 +750,12 @@ spec:
   version: 4.0.0
   replicas: 1
   bootstrapServers: bhf-kafka-bootstrap:9092
-  image: debezium/connect:2.5
+  image: quay.io/strimzi/kafka:latest-kafka-4.0.0
+  groupId: connect-cluster-banking
+  offsetStorageTopic: connect-cluster-banking-offsets
+  configStorageTopic: connect-cluster-banking-configs
+  statusStorageTopic: connect-cluster-banking-status
   config:
-    group.id: connect-cluster-banking
-    offset.storage.topic: connect-cluster-banking-offsets
-    config.storage.topic: connect-cluster-banking-configs
-    status.storage.topic: connect-cluster-banking-status
     config.providers: file
     config.providers.file.class: org.apache.kafka.common.config.provider.FileConfigProvider
   resources:
@@ -745,15 +767,15 @@ spec:
       cpu: 1000m
 EOF
 
-# Attendre que Kafka Connect soit prêt
+# 3. Attendre que Kafka Connect soit prêt
 echo "⏳ Attente du déploiement de Kafka Connect..."
 kubectl wait --for=condition=Ready kafkaconnect/kafka-connect-banking -n kafka --timeout=300s
 
-# Vérifier le déploiement
+# 4. Vérifier le déploiement
 kubectl get kafkaconnect -n kafka
 kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
 
-# Exposer Kafka Connect via NodePort
+# 5. Exposer Kafka Connect via NodePort
 echo "🌐 Exposition de Kafka Connect via NodePort..."
 kubectl apply -f - <<EOF
 apiVersion: v1
@@ -771,22 +793,24 @@ spec:
     strimzi.io/cluster: kafka-connect-banking
 EOF
 
-# Vérifier que le service est accessible
+# 6. Vérifier que le service est accessible
 echo "🔍 Vérification de l'accès à Kafka Connect..."
 sleep 10
 curl -s http://localhost:31083/connector-plugins | jq '.[].class' | head -5
 
-# Ajouter le repo Bitnami Helm (si nécessaire)
+# 7. Ajouter le repo Bitnami Helm (si nécessaire)
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 
-# Déployer PostgreSQL avec Helm
-helm install postgres-banking bitnami/postgresql \
+# 8. Déployer PostgreSQL avec Helm (configuration corrigée)
+helm upgrade --install postgres-banking bitnami/postgresql \
   -n kafka \
   --set auth.username=banking \
   --set auth.password=banking123 \
   --set auth.database=core_banking \
-  --set primary.extendedConfiguration="wal_level=logical\nmax_replication_slots=4\nmax_wal_senders=4"
+  --set primary.postgresql.conf.max_replication_slots=4 \
+  --set primary.postgresql.conf.max_wal_senders=4 \
+  --set primary.postgresql.conf.wal_level=logical
 
 # Déployer SQL Server
 kubectl apply -f - <<EOF
@@ -830,23 +854,43 @@ spec:
     app: sqlserver-banking
 EOF
 
-# Attendre que tous les services soient prêts
+# 9. Attendre que tous les services soient prêts (correct selectors)
 echo "⏳ Attente de PostgreSQL..."
-kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=postgres-banking -n kafka --timeout=300s
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=postgres-banking -n kafka --timeout=300s
 
 echo "⏳ Attente de SQL Server..."
 kubectl wait --for=condition=Ready pod -l app=sqlserver-banking -n kafka --timeout=300s
 
-# Vérifier l'état final
+# 10. Vérifier l'état final
 echo "🔍 État des déploiements:"
-kubectl get pods -n kafka -l app.kubernetes.io/name=postgres-banking
+kubectl get pods -n kafka -l app.kubernetes.io/instance=postgres-banking
 kubectl get pods -n kafka -l app=sqlserver-banking
 kubectl get kafkaconnect -n kafka
+
+echo ""
+echo "✅ Environnement Banking déployé!"
+echo "Prochaines étapes recommandées:"
+echo "  sudo ./02-verify-postgresql.sh"
+echo "  sudo ./03-verify-sqlserver.sh"
 ```
 
 </details>
 
 #### 7.1 Vérifier PostgreSQL
+
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./02-verify-postgresql.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./02-verify-postgresql.sh
+```
+
+#### 📋 Vérification Manuelle
 
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
@@ -868,27 +912,52 @@ docker exec -it postgres-banking psql -U banking -d core_banking -c "SELECT * FR
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
-# Vérifier que Kafka Connect est déployé
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+sudo ./02-verify-postgresql.sh
+
+# Si vous préférez le manuel, suivez ces étapes :
+
+# 1. Vérifier que Kafka Connect est déployé
 kubectl get kafkaconnect -n kafka
 kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
 
-# Vérifier que PostgreSQL est prêt
-kubectl wait --for=condition=Ready pod -l app=postgres-banking -n kafka --timeout=60s
-kubectl get pods -n kafka -l app=postgres-banking
+# 2. Vérifier que PostgreSQL est prêt (correct selector)
+kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=postgres-banking -n kafka --timeout=60s
+kubectl get pods -n kafka -l app.kubernetes.io/instance=postgres-banking
 
-# Connexion et vérification du schéma
-kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "\dt"
+# 3. Connexion et vérification du schéma
+kubectl exec -it -n kafka postgres-banking-postgresql-0 -- psql -U banking -d core_banking -c "\dt"
 
-# Vérifier les données clients
-kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name, customer_type FROM customers;"
+# 4. Vérifier les données clients
+kubectl exec -it -n kafka postgres-banking-postgresql-0 -- psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name, customer_type FROM customers;"
 
-# Vérifier la publication CDC
-kubectl exec -it -n kafka deploy/postgres-banking -- psql -U banking -d core_banking -c "SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';"
+# 5. Vérifier la publication CDC
+kubectl exec -it -n kafka postgres-banking-postgresql-0 -- psql -U banking -d core_banking -c "SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';"
 ```
+
+**⚠️ Problèmes Courants et Solutions:**
+
+- **`permission denied for table`**: Le script d'automatisation gère automatiquement les permissions
+- **`relation does not exist`**: Le script crée automatiquement le schéma et les données
+- **`fe_sendauth: no password supplied`**: Le script récupère automatiquement les mots de passe depuis les secrets Kubernetes
 
 </details>
 
 #### 7.2 Vérifier SQL Server
+
+#### 🚀 Approche Recommandée : Scripts d'Automatisation
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./03-verify-sqlserver.sh
+
+# Mode Kubernetes  
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./03-verify-sqlserver.sh
+```
+
+#### 📋 Vérification Manuelle
 
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
@@ -902,7 +971,7 @@ docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
 # Vérifier les cartes
 docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
   -S localhost -U sa -P "BankingStr0ng!Pass" -C \
-  -Q "USE transaction_banking; SELECT CardNumber, CardholderName, CardType, Status FROM Cards;"
+  -Q "USE transaction_banking; SELECT CardNumber, CardType, Status FROM Cards;"
 ```
 
 </details>
@@ -911,10 +980,35 @@ docker exec -it sqlserver-banking /opt/mssql-tools18/bin/sqlcmd \
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
 ```bash
+# ⚠️  APPROCHE RECOMMANDÉE : Utiliser le script d'automatisation
+sudo ./03-verify-sqlserver.sh
+
+# Si vous préférez le manuel, suivez ces étapes :
+
+# 1. Vérifier que SQL Server est prêt
+kubectl wait --for=condition=Ready pod -l app=sqlserver-banking -n kafka --timeout=120s
+
+# 2. Vérifier les bases de données
 kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "BankingStr0ng!Pass" -C \
-  -Q "USE transaction_banking; SELECT name, is_tracked_by_cdc FROM sys.tables WHERE is_tracked_by_cdc = 1;"
+  -S localhost -U sa -P 'BankingStr0ng!Pass' -C \
+  -Q "SELECT name FROM sys.databases ORDER BY name;"
+
+# 3. Vérifier les tables CDC
+kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'BankingStr0ng!Pass' -C \
+  -Q "USE transaction_banking; SELECT name, is_tracked_by_cdc FROM sys.tables WHERE name IN ('Cards', 'CardTransactions', 'FraudAlerts', 'Merchants');"
+
+# 4. Vérifier les cartes
+kubectl exec -it -n kafka deploy/sqlserver-banking -- /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'BankingStr0ng!Pass' -C \
+  -Q "USE transaction_banking; SELECT TOP 5 CardNumber, CardType, Status FROM Cards;"
 ```
+
+**⚠️ Problèmes Courants et Solutions:**
+
+- **`Database 'transaction_banking' does not exist`**: Le script crée automatiquement la base de données et le schéma
+- **`Invalid column name 'is_cdc_enabled'`**: Utilisez `is_tracked_by_cdc` à la place (corrigé dans le script)
+- **`bash: !Pass: event not found`**: Utilisez des quotes simples autour du mot de passe (corrigé dans le script)
 
 </details>
 
