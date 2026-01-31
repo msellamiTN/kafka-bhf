@@ -1429,22 +1429,184 @@ kubectl run kafka-consumer-groups --rm -it --restart=Never \
 ### Connecteur en état FAILED
 
 ```bash
-# Voir les erreurs
+# Voir les erreurs détaillées
 curl -s http://localhost:8083/connectors/file-source/status | jq '.tasks[0].trace'
 
 # Redémarrer la task
 curl -X POST http://localhost:8083/connectors/file-source/tasks/0/restart
+
+# Vérifier la configuration
+curl -s http://localhost:8083/connectors/file-source/config | jq
 ```
 
 ### Kafka Connect ne démarre pas
 
 ```bash
+# Docker
 docker logs kafka-connect --tail 100 | grep -i error
+
+# Kubernetes
+kubectl logs kafka-connect-banking-connect-0 -n kafka --tail 100 | grep -i error
 ```
+
+### Problèmes PostgreSQL (Kubernetes)
+
+**Symptôme**: `psql: error: connection to server on socket failed: FATAL: password authentication failed`
+
+**Solutions**:
+```bash
+# 1. Vérifier les mots de passe
+kubectl get secret postgres-banking-postgresql -n kafka -o yaml
+
+# 2. Récupérer les mots de passe corrects
+POSTGRES_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.password}" | base64 -d)
+POSTGRES_ADMIN_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+
+# 3. Accorder les permissions
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_ADMIN_PASSWORD}' psql -U postgres -d core_banking -c \"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO banking; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO banking;\""
+```
+
+**Symptôme**: `ERROR: relation "customers" does not exist`
+
+**Solution**:
+```bash
+# Recréer le schéma
+kubectl cp setup-postgres.sql postgres-banking-postgresql-0:/tmp/setup-postgres.sql -n kafka
+POSTGRES_ADMIN_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_ADMIN_PASSWORD}' psql -U postgres -d core_banking -f /tmp/setup-postgres.sql"
+```
+
+### Problèmes Kafka Connect (Kubernetes)
+
+**Symptôme**: `ImagePullBackOff` ou `CrashLoopBackOff`
+
+**Solutions**:
+```bash
+# 1. Vérifier les logs
+kubectl logs kafka-connect-banking-connect-0 -n kafka
+
+# 2. Si problème d'image Debezium, utiliser Strimzi
+kubectl delete kafkaconnect kafka-connect-banking -n kafka
+kubectl apply -f - <<EOF
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnect
+metadata:
+  name: kafka-connect-banking
+  namespace: kafka
+spec:
+  version: 4.0.0
+  replicas: 1
+  bootstrapServers: bhf-kafka-bootstrap:9092
+  image: quay.io/strimzi/kafka:latest-kafka-4.0.0
+  groupId: connect-cluster-banking
+  offsetStorageTopic: connect-cluster-banking-offsets
+  configStorageTopic: connect-cluster-banking-configs
+  statusStorageTopic: connect-cluster-banking-status
+EOF
+
+# 3. Attendre le déploiement
+kubectl wait --for=condition=Ready kafkaconnect/kafka-connect-banking -n kafka --timeout=300s
+```
+
+### Problèmes Helm PostgreSQL
+
+**Symptôme**: `INSTALLATION FAILED: cannot re-use a name that is still in use`
+
+**Solution**:
+```bash
+# Utiliser upgrade --install au lieu de install
+helm upgrade --install postgres-banking bitnami/postgresql -n kafka \
+  --set auth.username=banking \
+  --set auth.password=banking123 \
+  --set auth.database=core_banking \
+  --set primary.postgresql.conf.max_replication_slots=4 \
+  --set primary.postgresql.conf.max_wal_senders=4 \
+  --set primary.postgresql.conf.wal_level=logical
+```
+
+**Symptôme**: `syntax error in file "/opt/bitnami/postgresql/conf/conf.d/override.conf"`
+
+**Solution**: La configuration est déjà corrigée dans les scripts récents. Si le problème persiste:
+```bash
+# Supprimer et recréer
+helm uninstall postgres-banking -n kafka
+kubectl delete pvc -l app.kubernetes.io/instance=postgres-banking -n kafka
+# Puis relancer le script de déploiement
+```
+
+### Problèmes de Connectivité
+
+**Symptôme**: `curl: (7) Failed to connect to localhost:31083`
+
+**Solutions**:
+```bash
+# 1. Vérifier que le service NodePort existe
+kubectl get svc kafka-connect-banking -n kafka
+
+# 2. Vérifier le port
+kubectl get svc kafka-connect-banking -n kafka -o yaml | grep nodePort
+
+# 3. Vérifier que le pod est prêt
+kubectl get pods -n kafka -l strimzi.io/kind=KafkaConnect
+
+# 4. Tester depuis le cluster
+kubectl run test-connect --rm -i --tty --image=curlimages/curl -n kafka -- curl -s http://kafka-connect-banking:8083/connector-plugins
+```
+
+### Problèmes de Permissions
+
+**Symptôme**: `permission denied for table` ou `ERROR: must be owner of table`
+
+**Solution**:
+```bash
+# Donner les permissions complètes
+POSTGRES_ADMIN_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_ADMIN_PASSWORD}' psql -U postgres -d core_banking -c \"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO banking; GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO banking; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO banking;\""
+```
+
+### Scripts d'Automatisation
+
+Si vous rencontrez des problèmes, utilisez les scripts d'automatisation:
+
+```bash
+# Pour corriger l'environnement K8s
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./00-fix-environment.sh
+
+# Pour vérifier PostgreSQL
+sudo ./02-verify-postgresql.sh
+
+# Pour vérifier SQL Server
+sudo ./03-verify-sqlserver.sh
+```
+
+### Dépannage Général
+
+1. **Vérifier toujours les logs** des composants en erreur
+2. **Utiliser les scripts d'automatisation** qui gèrent les cas courants
+3. **Vérifier les permissions** des bases de données après création
+4. **Attendre la complétion** des déploiements Kubernetes avant de continuer
+5. **Utiliser kubectl wait** pour vérifier l'état des ressources
 
 ---
 
 ## 🧹 Nettoyage
+
+### Scripts d'Automatisation
+
+Pour un nettoyage complet et automatique, utilisez les scripts fournis:
+
+```bash
+# Mode Docker
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/docker
+sudo ./08-cleanup.sh
+
+# Mode Kubernetes
+cd formation-v2/day-03-integration/module-06-kafka-connect/scripts/k8s_okd
+sudo ./08-cleanup.sh
+```
+
+### Nettoyage Manuel
 
 <details>
 <summary>🐳 <b>Mode Docker</b></summary>
@@ -1473,6 +1635,17 @@ curl -X DELETE http://localhost:31083/connectors/sqlserver-banking-cdc
 # Supprimer les déploiements
 kubectl delete deployment postgres-banking sqlserver-banking -n kafka
 kubectl delete svc postgres-banking sqlserver-banking -n kafka
+
+# Supprimer Kafka Connect
+kubectl delete kafkaconnect kafka-connect-banking -n kafka
+kubectl delete svc kafka-connect-banking -n kafka
+
+# Supprimer PostgreSQL
+helm uninstall postgres-banking -n kafka
+kubectl delete pvc -l app.kubernetes.io/instance=postgres-banking -n kafka
+
+# Supprimer les scripts SQL temporaires
+kubectl exec -n kafka postgres-banking-postgresql-0 -- rm -f /tmp/setup-postgres.sql /tmp/setup-replication.sql 2>/dev/null || true
 ```
 
 </details>
