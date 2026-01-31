@@ -13,22 +13,24 @@ echo "⏳ Vérification de PostgreSQL..."
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=postgres-banking -n kafka --timeout=60s
 kubectl get pods -n kafka -l app.kubernetes.io/instance=postgres-banking
 
-# Récupérer le mot de passe PostgreSQL
-echo "🔑 Récupération du mot de passe PostgreSQL..."
+# Récupérer les mots de passe PostgreSQL
+echo "🔑 Récupération des mots de passe PostgreSQL..."
 POSTGRES_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.password}" | base64 -d)
-echo "Mot de passe récupéré: ${POSTGRES_PASSWORD:0:3}***"
+POSTGRES_ADMIN_PASSWORD=$(kubectl get secret --namespace kafka postgres-banking-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+echo "Mot de passe banking: ${POSTGRES_PASSWORD:0:3}***"
+echo "Mot de passe postgres: ${POSTGRES_ADMIN_PASSWORD:0:3}***"
 
 # Créer les tables et données initiales
 echo "📋 Création du schéma bancaire PostgreSQL..."
-kubectl exec -n kafka postgres-banking-postgresql-0 -- psql -U postgres -d core_banking -c "
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_ADMIN_PASSWORD}' psql -U postgres -d core_banking -c \"
 -- Créer l'utilisateur banking s'il n'existe pas
-DO \$\$
+DO \\\$\\$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'banking') THEN
       CREATE ROLE banking LOGIN PASSWORD '${POSTGRES_PASSWORD}';
    END IF;
 END
-\$\$;
+\\\$;
 
 -- Donner les permissions
 GRANT ALL PRIVILEGES ON DATABASE core_banking TO banking;
@@ -88,11 +90,11 @@ INSERT INTO accounts (customer_number, account_type, balance, currency, status) 
 (2, 'SAVINGS', 10000.00, 'EUR', 'ACTIVE'),
 (3, 'BUSINESS', 50000.00, 'EUR', 'ACTIVE')
 ON CONFLICT DO NOTHING;
-"
+\""
 
 # Activer la réplication logique et créer la publication
 echo "📡 Configuration de la réplication logique..."
-kubectl exec -n kafka postgres-banking-postgresql-0 -- psql -U postgres -d core_banking -c "
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_ADMIN_PASSWORD}' psql -U postgres -d core_banking -c \"
 -- Activer la réplication logique
 ALTER SYSTEM SET wal_level = logical;
 ALTER SYSTEM SET max_replication_slots = 4;
@@ -101,7 +103,7 @@ ALTER SYSTEM SET max_wal_senders = 4;
 -- Créer la publication CDC
 DROP PUBLICATION IF EXISTS dbz_publication;
 CREATE PUBLICATION dbz_publication FOR TABLE customers, accounts, transactions, transfers;
-"
+\""
 
 # Redémarrer PostgreSQL pour appliquer les changements
 echo "🔄 Redémarrage de PostgreSQL pour appliquer la configuration..."
@@ -110,15 +112,15 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=postgres-ba
 
 # Vérification finale
 echo "📋 Vérification des tables PostgreSQL:"
-kubectl exec -n kafka postgres-banking-postgresql-0 -- PGPASSWORD="${POSTGRES_PASSWORD}" psql -U banking -d core_banking -c "\dt"
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U banking -d core_banking -c \"\\dt\""
 
 echo ""
 echo "👥 Vérification des données clients:"
-kubectl exec -n kafka postgres-banking-postgresql-0 -- PGPASSWORD="${POSTGRES_PASSWORD}" psql -U banking -d core_banking -c "SELECT customer_number, first_name, last_name, customer_type FROM customers;"
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U banking -d core_banking -c \"SELECT customer_number, first_name, last_name, customer_type FROM customers;\""
 
 echo ""
 echo "📡 Vérification de la publication CDC:"
-kubectl exec -n kafka postgres-banking-postgresql-0 -- PGPASSWORD="${POSTGRES_PASSWORD}" psql -U banking -d core_banking -c "SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';"
+kubectl exec -n kafka postgres-banking-postgresql-0 -- bash -c "PGPASSWORD='${POSTGRES_PASSWORD}' psql -U banking -d core_banking -c \"SELECT * FROM pg_publication_tables WHERE pubname = 'dbz_publication';\""
 
 echo ""
 echo "✅ PostgreSQL vérifié avec succès!"
