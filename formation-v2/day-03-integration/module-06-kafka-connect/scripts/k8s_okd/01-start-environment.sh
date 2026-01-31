@@ -80,7 +80,9 @@ helm upgrade --install postgres-banking bitnami/postgresql \
   --set auth.username=banking \
   --set auth.password=banking123 \
   --set auth.database=core_banking \
-  --set primary.extendedConfiguration="wal_level=logical\nmax_replication_slots=4\nmax_wal_senders=4"
+  --set primary.postgresql.conf.max_replication_slots=4 \
+  --set primary.postgresql.conf.max_wal_senders=4 \
+  --set primary.postgresql.conf.wal_level=logical
 
 # Déployer SQL Server
 echo "🗄️  Déploiement de SQL Server..."
