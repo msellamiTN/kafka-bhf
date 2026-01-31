@@ -32,7 +32,7 @@ metadata:
 spec:
   version: 4.0.0
   replicas: 1
-  bootstrapServers: bhf-kafka-bootstrap:9092
+  bootstrapServers: bhf-kafka-kafka-bootstrap:9092
   image: quay.io/strimzi/kafka:latest-kafka-4.0.0
   groupId: connect-cluster-banking
   offsetStorageTopic: connect-cluster-banking-offsets
