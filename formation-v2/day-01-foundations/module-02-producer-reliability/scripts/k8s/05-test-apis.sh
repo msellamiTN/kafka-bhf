@@ -9,8 +9,12 @@ echo "=============================================="
 echo "  Module 02 - Test APIs on K8s"
 echo "=============================================="
 
-# Get node IP
-NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null)
+# Get node IP (first IPv4 address only)
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null | awk '{print $1}')
+if [ -z "$NODE_IP" ] || echo "$NODE_IP" | grep -q ":"; then
+  # Fallback to hostname -I for IPv4
+  NODE_IP=$(hostname -I | awk '{print $1}')
+fi
 if [ -z "$NODE_IP" ]; then
   NODE_IP="localhost"
 fi
