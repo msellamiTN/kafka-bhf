@@ -549,11 +549,178 @@ kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 
 ---
 
-## 📚 Lab 02.0 - Démarrage du module
+## �️ Phase de Développement (Optionnel)
+
+### Objectif
+
+Si vous souhaitez **développer les APIs depuis zéro** plutôt que d'utiliser le code fourni, suivez les tutoriels détaillés ci-dessous.
+
+> **Note** : Cette phase est **optionnelle**. Si vous voulez simplement déployer et tester les APIs existantes, passez directement au [Lab 02.0](#-lab-020---démarrage-du-module).
+
+---
+
+### Option A : Développer l'API Java
+
+**Tutoriel complet** : [`TUTORIAL-JAVA.md`](./TUTORIAL-JAVA.md)
+
+Ce tutoriel vous guide pas à pas pour créer l'API Java Spring Boot :
+
+| Étape | Description | Temps estimé |
+|-------|-------------|--------------|
+| **Étape 1** | Structure du projet Maven | 5 min |
+| **Étape 2** | Configuration `pom.xml` avec dépendances Kafka | 5 min |
+| **Étape 3** | Application Spring Boot principale | 5 min |
+| **Étape 4** | Service Producer (Plain + Idempotent) | 20 min |
+| **Étape 5** | Controllers REST (send + status + health) | 15 min |
+| **Étape 6** | Tests avec REST Client | 10 min |
+| **Étape 7** | Dockerfile multi-stage | 5 min |
+| **Étape 8** | Build et déploiement Docker | 10 min |
+
+**Prérequis pour le développement Java** :
+- VS Code avec extensions Java
+- JDK 17+
+- Maven 3.8+
+
+**Commandes rapides** :
+
+```bash
+# Créer la structure
+mkdir -p java/src/main/java/com/bhf/m02/{api,kafka}
+
+# Suivre le tutoriel TUTORIAL-JAVA.md
+code TUTORIAL-JAVA.md
+
+# Build local (sans Docker)
+cd java
+mvn clean package
+mvn spring-boot:run
+
+# Build Docker
+docker build -t m02-java-api:latest -f Dockerfile .
+```
+
+---
+
+### Option B : Développer l'API .NET
+
+**Tutoriel complet** : [`TUTORIAL-DOTNET.md`](./TUTORIAL-DOTNET.md)
+
+Ce tutoriel vous guide pas à pas pour créer l'API .NET Minimal API :
+
+| Étape | Description | Temps estimé |
+|-------|-------------|--------------|
+| **Étape 1** | Créer le projet .NET | 5 min |
+| **Étape 2** | `Program.cs` avec Confluent.Kafka | 20 min |
+| **Étape 3** | Endpoints REST (send + status + health) | 15 min |
+| **Étape 4** | Tests avec REST Client | 10 min |
+| **Étape 5** | Dockerfile | 5 min |
+| **Étape 6** | Build et déploiement Docker | 10 min |
+
+**Prérequis pour le développement .NET** :
+- VS Code avec extensions C#
+- .NET SDK 8.0+
+
+**Commandes rapides** :
+
+```bash
+# Créer le projet
+mkdir dotnet && cd dotnet
+dotnet new web -n M02ProducerReliability
+cd M02ProducerReliability
+dotnet add package Confluent.Kafka
+
+# Suivre le tutoriel TUTORIAL-DOTNET.md
+code ../TUTORIAL-DOTNET.md
+
+# Run local (sans Docker)
+dotnet run
+
+# Build Docker
+docker build -t m02-dotnet-api:latest -f Dockerfile .
+```
+
+---
+
+### Workflow Complet : Développement → Déploiement
+
+```mermaid
+flowchart TB
+    START["🎯 Début du Module"]
+    
+    subgraph DEV["🛠️ Phase Développement (Optionnel)"]
+        D1["📖 Lire TUTORIAL-JAVA.md<br/>ou TUTORIAL-DOTNET.md"]
+        D2["💻 Coder l'API<br/>étape par étape"]
+        D3["🧪 Tester localement<br/>mvn spring-boot:run<br/>ou dotnet run"]
+        D4["🐳 Créer Dockerfile"]
+        D5["📦 Build image Docker<br/>docker build"]
+        
+        D1 --> D2 --> D3 --> D4 --> D5
+    end
+    
+    subgraph DEPLOY["🚀 Phase Déploiement"]
+        L1["Lab 02.0: Démarrer services"]
+        L2["Lab 02.1: Tests synchrones"]
+        L3["Lab 02.2: Tests asynchrones"]
+        L4["Lab 02.3: Injection pannes"]
+        L5["Lab 02.4: Validation idempotence"]
+        
+        L1 --> L2 --> L3 --> L4 --> L5
+    end
+    
+    START --> |"Je veux coder"| DEV
+    START --> |"Je veux déployer"| DEPLOY
+    DEV --> DEPLOY
+    
+    style DEV fill:#e3f2fd
+    style DEPLOY fill:#f3e5f5
+```
+
+---
+
+### Comparaison des Approches
+
+| Approche | Avantages | Inconvénients | Temps |
+|----------|-----------|---------------|-------|
+| **Développer depuis zéro** | ✅ Comprendre chaque ligne<br/>✅ Personnaliser le code<br/>✅ Apprendre Spring Boot/.NET | ⏱️ Plus long<br/>🐛 Risque d'erreurs | ~75 min |
+| **Utiliser le code fourni** | ⚡ Rapide<br/>✅ Code testé<br/>✅ Focus sur Kafka | ❌ Moins d'apprentissage du code | ~10 min |
+
+---
+
+### Fichiers de Référence
+
+Le code source complet est disponible dans :
+
+```text
+module-02-producer-reliability/
+├── java/                          # API Java Spring Boot
+│   ├── src/main/java/com/bhf/m02/
+│   │   ├── M02ProducerReliabilityApplication.java
+│   │   ├── api/
+│   │   │   ├── ProducerController.java
+│   │   │   └── HealthController.java
+│   │   └── kafka/
+│   │       └── ProducerService.java
+│   ├── pom.xml
+│   └── Dockerfile
+├── dotnet/                        # API .NET Minimal API
+│   ├── M02ProducerReliability/
+│   │   └── Program.cs
+│   ├── M02ProducerReliability.csproj
+│   └── Dockerfile
+├── TUTORIAL-JAVA.md              # 📖 Guide développement Java
+├── TUTORIAL-DOTNET.md            # 📖 Guide développement .NET
+└── README.md                     # 📖 Ce fichier
+```
+
+---
+
+## �📚 Lab 02.0 - Démarrage du module
 
 ### Objectif
 
 Démarrer les services du module (APIs Java/.NET + Toxiproxy) et vérifier leur bon fonctionnement.
+
+> **Prérequis** : Si vous avez suivi la phase de développement, assurez-vous que vos images Docker sont construites. Sinon, les images seront construites automatiquement lors du déploiement.
 
 ---
 
