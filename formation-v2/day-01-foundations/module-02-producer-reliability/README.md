@@ -456,12 +456,12 @@ flowchart TB
 
 ### Services
 
-| Service | Port | URL |
-|---------|------|-----|
-| Java API | 18080 | http://localhost:18080 |
-| .NET API | 18081 | http://localhost:18081 |
-| Toxiproxy | 8474 | http://localhost:8474 |
-| Kafka UI | 8080 | http://localhost:8080 |
+| Service | Port Docker | Port K8s | URL |
+|---------|-------------|----------|-----|
+| Java API | 18080 | 31080 | http://localhost:18080 (Docker) / http://localhost:31080 (K8s) |
+| .NET API | 18081 | 31081 | http://localhost:18081 (Docker) / http://localhost:31081 (K8s) |
+| Toxiproxy | 8474 | 31474 | http://localhost:8474 (Docker) / http://localhost:31474 (K8s) |
+| Kafka UI | 8080 | 30808 | http://localhost:8080 (Docker) / http://localhost:30808 (K8s) |
 
 ### Endpoints des APIs
 
@@ -605,76 +605,59 @@ docker compose -f day-01-foundations/module-02-producer-reliability/docker-compo
 <details>
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
-**Explication** : En mode K8s, les APIs doivent être déployées comme des Deployments avec des Services NodePort.
+**Explication** : En mode K8s, les APIs sont déployées comme des Deployments avec des Services NodePort. Les manifests YAML sont pré-configurés.
 
-**Option 1 - Utiliser les images Docker locales** :
+**Commande** :
 
 ```bash
-# Builder et pousser les images vers le registry local
-cd formation-v2/day-01-foundations/module-02-producer-reliability
+# Déployer tous les services
+kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/
 
-# Build Java API
-docker build -t localhost:5000/m02-java-api:latest -f java-api/Dockerfile java-api/
-docker push localhost:5000/m02-java-api:latest
-
-# Build .NET API
-docker build -t localhost:5000/m02-dotnet-api:latest -f dotnet-api/Dockerfile dotnet-api/
-docker push localhost:5000/m02-dotnet-api:latest
+# Ou déployer individuellement :
+kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/toxiproxy.yaml
+kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/toxiproxy-init.yaml
+kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/m02-java-api.yaml
+kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/m02-dotnet-api.yaml
 ```
 
-**Option 2 - Déployer sur K8s** :
+**⏱️ Temps d'attente** : 3-5 minutes (pull des images + démarrage).
 
-```bash
-# Créer le déploiement Java API
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: m02-java-api
-  namespace: kafka
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: m02-java-api
-  template:
-    metadata:
-      labels:
-        app: m02-java-api
-    spec:
-      containers:
-      - name: java-api
-        image: localhost:5000/m02-java-api:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "bhf-kafka-kafka-bootstrap.kafka.svc:9092"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: m02-java-api
-  namespace: kafka
-spec:
-  type: NodePort
-  ports:
-  - port: 8080
-    targetPort: 8080
-    nodePort: 31080
-  selector:
-    app: m02-java-api
-EOF
+**Résultat attendu** :
+
+```text
+deployment.apps/toxiproxy created
+service/toxiproxy created
+job.batch/toxiproxy-init created
+deployment.apps/m02-java-api created
+service/m02-java-api created
+deployment.apps/m02-dotnet-api created
+service/m02-dotnet-api created
 ```
 
-**Vérification** :
+**Vérification des déploiements** :
 
 ```bash
+kubectl get pods -n kafka -l app=toxiproxy
 kubectl get pods -n kafka -l app=m02-java-api
-kubectl get svc m02-java-api -n kafka
+kubectl get pods -n kafka -l app=m02-dotnet-api
+kubectl get svc -n kafka | grep m02
 ```
 
-> **Note** : En mode K8s, Toxiproxy n'est pas utilisé. Les tests de latence peuvent être effectués avec des outils comme `tc` (traffic control) ou en simulant des pannes de pods.
+**Résultat attendu** :
+
+```text
+NAME                    READY   STATUS    RESTARTS   AGE
+toxiproxy-xxxxx         1/1     Running   0          Xs
+m02-java-api-xxxxx      1/1     Running   0          Xs
+m02-dotnet-api-xxxxx    1/1     Running   0          Xs
+
+NAME                    TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+m02-java-api            NodePort   10.x.x.x        <none>        8080:31080/TCP   Xs
+m02-dotnet-api          NodePort   10.x.x.x        <none>        8080:31081/TCP   Xs
+toxiproxy               NodePort   10.x.x.x        <none>        8474:31474/TCP   Xs
+```
+
+> **Note** : Les manifests utilisent les images locales `m02-java-api:latest` et `m02-dotnet-api:latest`. Assurez-vous que ces images sont disponibles dans votre cluster ou modifiez les manifests pour utiliser les bonnes références d'images.
 
 </details>
 
