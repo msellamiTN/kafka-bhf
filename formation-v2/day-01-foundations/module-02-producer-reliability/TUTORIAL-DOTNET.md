@@ -72,7 +72,7 @@ sequenceDiagram
     K->>R: Replication
     R-->>K: ACK
     
-    Note sur P: Timeout ! Réessai
+    Note over P: Timeout ! Réessai
     P->>K: Envoi Message (PID:123, Seq:1)
     K->>K: Détection duplicata
     K-->>P: ACK (sans duplication)
