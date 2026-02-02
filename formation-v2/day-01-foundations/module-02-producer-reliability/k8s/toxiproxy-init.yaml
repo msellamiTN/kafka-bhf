@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: toxiproxy-init
+  namespace: kafka
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: toxiproxy-init
+        image: curlimages/curl:8.5.0
+        command:
+        - sh
+        - -c
+        - |
+          echo "Creating Kafka proxy..."
+          curl -fsS -X POST http://toxiproxy:8474/proxies \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"kafka","listen":"0.0.0.0:29093","upstream":"bhf-kafka-kafka-bootstrap:9092"}' \
+            && echo "✅ Proxy created successfully" \
+            || echo "❌ Failed to create proxy"
+      initContainers:
+      - name: wait-for-toxiproxy
+        image: curlimages/curl:8.5.0
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Toxiproxy to be ready..."
+          for i in \$(seq 1 30); do
+            if curl -fsS http://toxiproxy:8474/list > /dev/null 2>&1; then
+              echo "✅ Toxiproxy is ready"
+              exit 0
+            fi
+            echo "⏳ Waiting for Toxiproxy... (\$i/30)"
+            sleep 2
+          done
+          echo "❌ Timeout waiting for Toxiproxy"
+          exit 1

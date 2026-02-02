@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: m02-java-api
+  namespace: kafka
+  labels:
+    app: m02-java-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: m02-java-api
+  template:
+    metadata:
+      labels:
+        app: m02-java-api
+    spec:
+      containers:
+      - name: java-api
+        image: m02-java-api:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "bhf-kafka-kafka-bootstrap:9092"
+        - name: SERVER_PORT
+          value: "8080"
+        - name: KAFKA_REQUEST_TIMEOUT_MS
+          value: "30000"
+        - name: KAFKA_DELIVERY_TIMEOUT_MS
+          value: "120000"
+        - name: KAFKA_RETRY_BACKOFF_MS
+          value: "100"
+        - name: KAFKA_RETRIES
+          value: "3"
+        - name: KAFKA_LINGER_MS
+          value: "0"
+        - name: KAFKA_ACKS_PLAIN
+          value: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: m02-java-api
+  namespace: kafka
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    nodePort: 31080
+    targetPort: 8080
+  selector:
+    app: m02-java-api
