@@ -28,12 +28,12 @@ spec:
         - -c
         - |
           echo "Waiting for Toxiproxy to be ready..."
-          for i in \$(seq 1 30); do
+          for i in $(seq 1 30); do
             if curl -fsS http://toxiproxy:8474/list > /dev/null 2>&1; then
-              echo "✅ Toxiproxy is ready"
+              echo "Toxiproxy is ready"
               exit 0
             fi
-            echo "⏳ Waiting for Toxiproxy... (\$i/30)"
+            echo "Waiting for Toxiproxy... ($i/30)"
             sleep 2
           done
           echo "❌ Timeout waiting for Toxiproxy"
