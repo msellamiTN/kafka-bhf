@@ -549,126 +549,154 @@ kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 
 ---
 
-## �️ Phase de Développement (Optionnel)
+## 🛠️ Phase de Développement .NET avec Kafka
 
 ### Objectif
 
-Si vous souhaitez **développer les APIs depuis zéro** plutôt que d'utiliser le code fourni, suivez les tutoriels détaillés ci-dessous.
+Ce module est conçu pour les **développeurs .NET BHF** souhaitant maîtriser l'intégration Kafka dans leurs applications. Vous apprendrez à développer un Producer Kafka fiable, puis à le déployer et tester dans des environnements Docker et Kubernetes.
 
-> **Note** : Cette phase est **optionnelle**. Si vous voulez simplement déployer et tester les APIs existantes, passez directement au [Lab 02.0](#-lab-020---démarrage-du-module).
+> **Note** : Cette phase est **recommandée** pour comprendre en profondeur l'intégration Kafka. Si vous voulez simplement déployer et tester, passez directement au [Lab 02.0](#-lab-020---démarrage-du-module).
 
 ---
 
-### Option A : Développer l'API Java
+### 🎯 Focus .NET : Cycle de Développement avec Kafka
 
-**Tutoriel complet** : [`TUTORIAL-JAVA.md`](./TUTORIAL-JAVA.md)
+#### Étape 1 : Prérequis .NET
 
-Ce tutoriel vous guide pas à pas pour créer l'API Java Spring Boot :
+| Outil | Version | Installation |
+|-------|---------|--------------|
+| **VS Code** | Latest | [code.visualstudio.com](https://code.visualstudio.com) |
+| **.NET SDK** | 8.0+ | `winget install Microsoft.DotNet.SDK.8` |
+| **Docker** | Latest | Pour Kafka et déploiement |
+| **kubectl** | Latest | Pour déploiement K8s |
 
-| Étape | Description | Temps estimé |
-|-------|-------------|--------------|
-| **Étape 1** | Structure du projet Maven | 5 min |
-| **Étape 2** | Configuration `pom.xml` avec dépendances Kafka | 5 min |
-| **Étape 3** | Application Spring Boot principale | 5 min |
-| **Étape 4** | Service Producer (Plain + Idempotent) | 20 min |
-| **Étape 5** | Controllers REST (send + status + health) | 15 min |
-| **Étape 6** | Tests avec REST Client | 10 min |
-| **Étape 7** | Dockerfile multi-stage | 5 min |
-| **Étape 8** | Build et déploiement Docker | 10 min |
-
-**Prérequis pour le développement Java** :
-- VS Code avec extensions Java
-- JDK 17+
-- Maven 3.8+
-
-**Commandes rapides** :
+**Extensions VS Code pour .NET** :
 
 ```bash
-# Créer la structure
-mkdir -p java/src/main/java/com/bhf/m02/{api,kafka}
-
-# Suivre le tutoriel TUTORIAL-JAVA.md
-code TUTORIAL-JAVA.md
-
-# Build local (sans Docker)
-cd java
-mvn clean package
-mvn spring-boot:run
-
-# Build Docker
-docker build -t m02-java-api:latest -f Dockerfile .
+code --install-extension ms-dotnettools.csharp
+code --install-extension ms-dotnettools.csdevkit
+code --install-extension humao.rest-client
 ```
 
----
-
-### Option B : Développer l'API .NET
-
-**Tutoriel complet** : [`TUTORIAL-DOTNET.md`](./TUTORIAL-DOTNET.md)
-
-Ce tutoriel vous guide pas à pas pour créer l'API .NET Minimal API :
-
-| Étape | Description | Temps estimé |
-|-------|-------------|--------------|
-| **Étape 1** | Créer le projet .NET | 5 min |
-| **Étape 2** | `Program.cs` avec Confluent.Kafka | 20 min |
-| **Étape 3** | Endpoints REST (send + status + health) | 15 min |
-| **Étape 4** | Tests avec REST Client | 10 min |
-| **Étape 5** | Dockerfile | 5 min |
-| **Étape 6** | Build et déploiement Docker | 10 min |
-
-**Prérequis pour le développement .NET** :
-- VS Code avec extensions C#
-- .NET SDK 8.0+
-
-**Commandes rapides** :
+#### Étape 2 : Création du Projet .NET Kafka
 
 ```bash
-# Créer le projet
+# Créer la structure du projet
 mkdir dotnet && cd dotnet
 dotnet new web -n M02ProducerReliability
 cd M02ProducerReliability
+
+# Ajouter Confluent.Kafka (client officiel)
 dotnet add package Confluent.Kafka
 
-# Suivre le tutoriel TUTORIAL-DOTNET.md
-code ../TUTORIAL-DOTNET.md
+# Ouvrir dans VS Code
+code .
+```
 
-# Run local (sans Docker)
+#### Étape 3 : Développement du Producer Kafka
+
+**Tutoriel complet** : [`TUTORIAL-DOTNET.md`](./TUTORIAL-DOTNET.md)
+
+Ce tutoriel vous guidera à travers :
+
+| Phase | Description | Focus Kafka | Temps |
+|-------|-------------|-------------|-------|
+| **Configuration** | `Program.cs` avec Confluent.Kafka | ProducerConfig, Acks, Idempotence | 20 min |
+| **Endpoints** | API REST Minimal | Send, Status, Health | 15 min |
+| **Modes Producer** | Plain vs Idempotent | `EnableIdempotence`, retries | 15 min |
+| **Tests** | REST Client | Validation envoi synchrone/asynchrone | 10 min |
+| **Dockerfile** | Multi-stage build | Optimisation pour production | 5 min |
+
+**Concepts Kafka maîtrisés** :
+
+```mermaid
+flowchart LR
+    DEV["🔷 Développeur .NET"] --> KAFKA["📦 Kafka"]
+    
+    subgraph KAFKA_CONCEPTS["Concepts Kafka Appris"]
+        P1["Producer Configuration"]
+        P2["Acks (0/1/all)"]
+        P3["Idempotence"]
+        P4["Retries & Timeouts"]
+        P5["Partitionnement"]
+    end
+    
+    KAFKA --> KAFKA_CONCEPTS
+```
+
+#### Étape 4 : Build et Test Local
+
+```bash
+# Build et run local (développement)
+dotnet build
 dotnet run
 
-# Build Docker
+# Test des endpoints (dans un autre terminal)
+curl http://localhost:8080/health
+
+# Test envoi message
+curl -X POST "http://localhost:8080/api/v1/send?mode=idempotent&eventId=TEST-001&sendMode=sync"
+```
+
+#### Étape 5 : Dockerisation
+
+```bash
+# Build image Docker
 docker build -t m02-dotnet-api:latest -f Dockerfile .
+
+# Test en Docker
+docker run -p 8080:8080 -e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 m02-dotnet-api:latest
 ```
 
 ---
 
-### Workflow Complet : Développement → Déploiement
+### 🚀 Phase de Déploiement et Test
+
+Après avoir développé votre API .NET Kafka, vous apprendrez à :
+
+#### 1. **Déploiement Docker**
+- Docker Compose avec Kafka
+- Variables d'environnement
+- Réseaux et ports
+
+#### 2. **Déploiement Kubernetes**
+- Manifestes YAML
+- K3s containerd
+- Services NodePort
+
+#### 3. **Tests de Fiabilité**
+- Tests synchrones/asynchrones
+- Injection de pannes avec Toxiproxy
+- Validation idempotence
+
+---
+
+### 📊 Workflow .NET Complet
 
 ```mermaid
 flowchart TB
-    START["🎯 Début du Module"]
+    START["🎯 Développeur .NET BHF"]
     
-    subgraph DEV["🛠️ Phase Développement (Optionnel)"]
-        D1["📖 Lire TUTORIAL-JAVA.md<br/>ou TUTORIAL-DOTNET.md"]
-        D2["💻 Coder l'API<br/>étape par étape"]
-        D3["🧪 Tester localement<br/>mvn spring-boot:run<br/>ou dotnet run"]
-        D4["🐳 Créer Dockerfile"]
-        D5["📦 Build image Docker<br/>docker build"]
+    subgraph DEV["🛠️ Développement .NET + Kafka"]
+        D1["📦 Créer projet .NET"]
+        D2["⚙️ Configurer Confluent.Kafka"]
+        D3["🔷 Implémenter Producer"]
+        D4["🧪 Tests locaux"]
+        D5["🐳 Dockeriser"]
         
         D1 --> D2 --> D3 --> D4 --> D5
     end
     
-    subgraph DEPLOY["🚀 Phase Déploiement"]
-        L1["Lab 02.0: Démarrer services"]
-        L2["Lab 02.1: Tests synchrones"]
-        L3["Lab 02.2: Tests asynchrones"]
-        L4["Lab 02.3: Injection pannes"]
-        L5["Lab 02.4: Validation idempotence"]
+    subgraph DEPLOY["🚀 Déploiement & Tests"]
+        L1["📦 Docker Compose"]
+        L2["☸️ Kubernetes"]
+        L3["🧪 Tests de fiabilité"]
+        L4["📊 Validation idempotence"]
         
-        L1 --> L2 --> L3 --> L4 --> L5
+        L1 --> L2 --> L3 --> L4
     end
     
-    START --> |"Je veux coder"| DEV
-    START --> |"Je veux déployer"| DEPLOY
+    START --> DEV
     DEV --> DEPLOY
     
     style DEV fill:#e3f2fd
@@ -677,22 +705,52 @@ flowchart TB
 
 ---
 
-### Comparaison des Approches
+### 🎓 Compétences .NET + Kafka Acquises
 
-| Approche | Avantages | Inconvénients | Temps |
-|----------|-----------|---------------|-------|
-| **Développer depuis zéro** | ✅ Comprendre chaque ligne<br/>✅ Personnaliser le code<br/>✅ Apprendre Spring Boot/.NET | ⏱️ Plus long<br/>🐛 Risque d'erreurs | ~75 min |
-| **Utiliser le code fourni** | ⚡ Rapide<br/>✅ Code testé<br/>✅ Focus sur Kafka | ❌ Moins d'apprentissage du code | ~10 min |
+À la fin de ce module, vous maîtriserez :
+
+| Compétence | Description | Application .NET |
+|------------|-------------|-------------------|
+| **Producer Kafka** | Configuration avancée | `ProducerConfig`, `EnableIdempotence` |
+| **Fiabilité** | Gestion des erreurs | Retries, timeouts, callbacks |
+| **Déploiement** | Docker & K8s | Dockerfile, manifests YAML |
+| **Monitoring** | Tests et validation | Health checks, logs |
+| **Production** | Best practices | Idempotence, exactly-once |
 
 ---
 
-### Fichiers de Référence
+### 📚 Ressources .NET
 
-Le code source complet est disponible dans :
+| Ressource | Description | Lien |
+|-----------|-------------|------|
+| **Tutoriel complet** | Guide pas à pas | [`TUTORIAL-DOTNET.md`](./TUTORIAL-DOTNET.md) |
+| **Code source** | Implémentation complète | [`dotnet/`](./dotnet/) |
+| **Confluent.Kafka** | Documentation officielle | [github.com/confluentinc/confluent-kafka-dotnet](https://github.com/confluentinc/confluent-kafka-dotnet) |
+| **.NET 8** | Documentation Minimal API | [learn.microsoft.com/aspnet/core](https://learn.microsoft.com/aspnet/core) |
+
+---
+
+### 🐍 Alternative : API Java (Référence)
+
+Pour comparaison, une implémentation Java est disponible :
+- **Tutoriel** : [`TUTORIAL-JAVA.md`](./TUTORIAL-JAVA.md)
+- **Code** : [`java/`](./java/)
+
+Cette version utilise Spring Boot et les mêmes concepts Kafka pour référence.
+
+---
+
+### 📁 Structure du Projet .NET
 
 ```text
 module-02-producer-reliability/
-├── java/                          # API Java Spring Boot
+├── dotnet/                        # 🔷 API .NET (FOCUS PRINCIPAL)
+│   ├── M02ProducerReliability/
+│   │   ├── Program.cs             # Producer Kafka + API REST
+│   │   ├── M02ProducerReliability.csproj
+│   │   └── Dockerfile             # Multi-stage build
+│   └── requests.http              # Tests REST Client
+├── java/                          # 🐍 API Java (référence)
 │   ├── src/main/java/com/bhf/m02/
 │   │   ├── M02ProducerReliabilityApplication.java
 │   │   ├── api/
@@ -702,19 +760,27 @@ module-02-producer-reliability/
 │   │       └── ProducerService.java
 │   ├── pom.xml
 │   └── Dockerfile
-├── dotnet/                        # API .NET Minimal API
-│   ├── M02ProducerReliability/
-│   │   └── Program.cs
-│   ├── M02ProducerReliability.csproj
-│   └── Dockerfile
-├── TUTORIAL-JAVA.md              # 📖 Guide développement Java
-├── TUTORIAL-DOTNET.md            # 📖 Guide développement .NET
+├── TUTORIAL-DOTNET.md            # 📖 Guide .NET complet
+├── TUTORIAL-JAVA.md              # 📖 Guide Java (référence)
+├── scripts/k8s/                  # ☸️ Scripts K8s pour .NET
+│   ├── 00-full-deploy.sh          # Pipeline complet
+│   ├── 01-build-images.sh         # Build .NET image
+│   ├── 02-import-images.sh        # Import K3s
+│   ├── 03-deploy.sh               # Deploy manifests
+│   ├── 04-validate.sh             # Validation pods
+│   ├── 05-test-apis.sh            # Tests .NET APIs
+│   └── README.md                  # Documentation K8s
+├── k8s/                          # ☸️ Manifestes Kubernetes
+│   ├── m02-dotnet-api.yaml        # Deployment .NET
+│   ├── m02-java-api.yaml          # Deployment Java (référence)
+│   ├── toxiproxy.yaml            # Toxiproxy pour tests
+│   └── toxiproxy-init.yaml       # Configuration proxy
 └── README.md                     # 📖 Ce fichier
 ```
 
 ---
 
-## �📚 Lab 02.0 - Démarrage du module
+## �� Lab 02.0 - Démarrage du module
 
 ### Objectif
 
