@@ -65,7 +65,7 @@ echo "-------------------------------------------"
 EVENT_JAVA="JAVA-K8S-TEST-$(date +%s)"
 echo -n "Java API sync send (eventId=$EVENT_JAVA): "
 JAVA_RESULT=$(curl -fsS --max-time 30 -X POST "$JAVA_API/api/v1/send?mode=idempotent&sendMode=sync&eventId=$EVENT_JAVA" 2>/dev/null || echo "FAILED")
-if echo "$JAVA_RESULT" | grep -q "OK"; then
+if echo "$JAVA_RESULT" | grep -qE '"(status|offset)"'; then
   echo "✅"
   echo "  Response: $JAVA_RESULT"
 else
@@ -78,7 +78,7 @@ fi
 EVENT_DOTNET="DOTNET-K8S-TEST-$(date +%s)"
 echo -n ".NET API sync send (eventId=$EVENT_DOTNET): "
 DOTNET_RESULT=$(curl -fsS --max-time 30 -X POST "$DOTNET_API/api/v1/send?mode=idempotent&sendMode=sync&eventId=$EVENT_DOTNET" 2>/dev/null || echo "FAILED")
-if echo "$DOTNET_RESULT" | grep -q "OK"; then
+if echo "$DOTNET_RESULT" | grep -qE '"(status|offset)"'; then
   echo "✅"
   echo "  Response: $DOTNET_RESULT"
 else
