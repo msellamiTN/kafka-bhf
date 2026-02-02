@@ -605,22 +605,107 @@ docker compose -f day-01-foundations/module-02-producer-reliability/docker-compo
 <details>
 <summary>☸️ <b>Mode OKD/K3s</b></summary>
 
-**Explication** : En mode K8s, les APIs sont déployées comme des Deployments avec des Services NodePort. Les manifests YAML sont pré-configurés.
+**Explication** : En mode K8s, les APIs sont déployées comme des Deployments avec des Services NodePort. Les manifests YAML sont pré-configurés dans le dossier `k8s/`.
 
-**Commande** :
+#### Architecture K8s du Module
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                   Namespace: kafka                           │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │   Java API      │  │   .NET API      │  │  Toxiproxy  │  │
+│  │   NodePort:     │  │   NodePort:     │  │  NodePort:  │  │
+│  │   31080         │  │   31081         │  │  31474      │  │
+│  └────────┬────────┘  └────────┬────────┘  └──────┬──────┘  │
+│           │                    │                   │         │
+│           └────────────────────┼───────────────────┘         │
+│                                │                             │
+│                    ┌───────────▼───────────┐                 │
+│                    │   Kafka Bootstrap     │                 │
+│                    │   bhf-kafka:9092      │                 │
+│                    └───────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Option A : Déploiement automatisé (Recommandé)
+
+Des scripts automatisés sont disponibles pour simplifier le déploiement :
+
+```bash
+cd day-01-foundations/module-02-producer-reliability/scripts/k8s
+chmod +x *.sh
+
+# Pipeline complet (build + import + deploy + test)
+sudo ./00-full-deploy.sh
+```
+
+**Ce script exécute automatiquement** :
+1. Construction des images Docker
+2. Import des images dans K3s containerd
+3. Déploiement des manifests Kubernetes
+4. Validation des pods et services
+5. Tests des APIs
+
+#### Option B : Déploiement manuel étape par étape
+
+**Étape 2.1 - Construction des images Docker**
+
+```bash
+cd formation-v2/day-01-foundations/module-02-producer-reliability
+
+# Build Java API
+docker build -t m02-java-api:latest -f java/Dockerfile java/
+
+# Build .NET API  
+docker build -t m02-dotnet-api:latest -f dotnet/Dockerfile dotnet/
+
+# Vérifier les images
+docker images | grep m02
+```
+
+**Résultat attendu** :
+
+```text
+m02-java-api      latest    xxxxx    xx seconds ago    438MB
+m02-dotnet-api    latest    xxxxx    xx seconds ago    425MB
+```
+
+**Étape 2.2 - Import des images dans K3s**
+
+> **Important** : K3s utilise **containerd** comme runtime, pas Docker. Les images doivent être exportées puis importées dans containerd.
+
+```bash
+# Exporter les images Docker
+sudo docker save m02-java-api:latest -o /tmp/m02-java-api.tar
+sudo docker save m02-dotnet-api:latest -o /tmp/m02-dotnet-api.tar
+
+# Importer dans K3s containerd
+sudo k3s ctr images import /tmp/m02-java-api.tar
+sudo k3s ctr images import /tmp/m02-dotnet-api.tar
+
+# Vérifier les images importées
+sudo k3s ctr images list | grep m02
+```
+
+**Résultat attendu** :
+
+```text
+docker.io/library/m02-java-api:latest      application/vnd.oci.image.index.v1+json   sha256:xxx   119.5 MiB
+docker.io/library/m02-dotnet-api:latest    application/vnd.oci.image.index.v1+json   sha256:xxx   115.4 MiB
+```
+
+**Étape 2.3 - Déploiement des manifests**
 
 ```bash
 # Déployer tous les services
-kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/
+kubectl apply -f k8s/
 
 # Ou déployer individuellement :
-kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/toxiproxy.yaml
-kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/toxiproxy-init.yaml
-kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/m02-java-api.yaml
-kubectl apply -f day-01-foundations/module-02-producer-reliability/k8s/m02-dotnet-api.yaml
+kubectl apply -f k8s/toxiproxy.yaml
+kubectl apply -f k8s/toxiproxy-init.yaml
+kubectl apply -f k8s/m02-java-api.yaml
+kubectl apply -f k8s/m02-dotnet-api.yaml
 ```
-
-**⏱️ Temps d'attente** : 3-5 minutes (pull des images + démarrage).
 
 **Résultat attendu** :
 
@@ -634,57 +719,70 @@ deployment.apps/m02-dotnet-api created
 service/m02-dotnet-api created
 ```
 
-**Vérification des déploiements** :
+**Étape 2.4 - Vérification des déploiements**
 
 ```bash
-kubectl get pods -n kafka -l app=toxiproxy
-kubectl get pods -n kafka -l app=m02-java-api
-kubectl get pods -n kafka -l app=m02-dotnet-api
-kubectl get svc -n kafka | grep m02
+# Vérifier les pods
+kubectl get pods -n kafka -l 'app in (toxiproxy,m02-java-api,m02-dotnet-api)'
+
+# Vérifier les services
+kubectl get svc -n kafka | grep -E "m02|toxiproxy"
 ```
 
 **Résultat attendu** :
 
 ```text
-NAME                    READY   STATUS    RESTARTS   AGE
-toxiproxy-xxxxx         1/1     Running   0          Xs
-m02-java-api-xxxxx      1/1     Running   0          Xs
-m02-dotnet-api-xxxxx    1/1     Running   0          Xs
+NAME                       READY   STATUS    RESTARTS   AGE
+toxiproxy-xxxxx            1/1     Running   0          Xs
+m02-java-api-xxxxx         1/1     Running   0          Xs
+m02-dotnet-api-xxxxx       1/1     Running   0          Xs
 
-NAME                    TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-m02-java-api            NodePort   10.x.x.x        <none>        8080:31080/TCP   Xs
-m02-dotnet-api          NodePort   10.x.x.x        <none>        8080:31081/TCP   Xs
-toxiproxy               NodePort   10.x.x.x        <none>        8474:31474/TCP   Xs
+NAME             TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)                         AGE
+m02-java-api     NodePort   10.x.x.x        <none>        8080:31080/TCP                  Xs
+m02-dotnet-api   NodePort   10.x.x.x        <none>        8080:31081/TCP                  Xs
+toxiproxy        NodePort   10.x.x.x        <none>        8474:31474/TCP,29093:32093/TCP  Xs
 ```
 
-> **Note** : Les manifests utilisent les images locales `m02-java-api:latest` et `m02-dotnet-api:latest`. Vous devez construire ces images localement avant de déployer sur Kubernetes :
+#### Tableau des ports K8s
+
+| Service | Port interne | NodePort | Description |
+| ------- | ------------ | -------- | ----------- |
+| m02-java-api | 8080 | 31080 | API Java Spring Boot |
+| m02-dotnet-api | 8080 | 31081 | API .NET ASP.NET |
+| toxiproxy (API) | 8474 | 31474 | API de gestion Toxiproxy |
+| toxiproxy (Proxy) | 29093 | 32093 | Proxy Kafka avec injection de latence |
+
+#### Dépannage K8s
+
+**Problème : ImagePullBackOff**
 
 ```bash
-# Construire les images Docker locales
-cd formation-v2/day-01-foundations/module-02-producer-reliability
-
-# Build Java API
-docker build -t m02-java-api:latest -f java/Dockerfile java/
-
-# Build .NET API  
-docker build -t m02-dotnet-api:latest -f dotnet/Dockerfile dotnet/
-
-# Vérifier les images
-docker images | grep m02
-
-# Exporter les images pour Kubernetes local
-sudo docker save m02-java-api:latest -o m02-java-api.tar
-sudo docker save m02-dotnet-api:latest -o m02-dotnet-api.tar
-
-# Importer les images dans K3s (containerd)
-sudo k3s ctr images import m02-java-api.tar
-sudo k3s ctr images import m02-dotnet-api.tar
-
-# Vérifier les images importées
+# Vérifier que les images sont dans containerd
 sudo k3s ctr images list | grep m02
+
+# Si absent, réimporter
+sudo ./scripts/k8s/02-import-images.sh
 ```
 
-Si vous utilisez un cluster Kubernetes distant, vous devez pousser ces images vers un registre accessible et modifier les manifests en conséquence.
+**Problème : Toxiproxy CrashLoopBackOff**
+
+```bash
+# Vérifier les logs
+kubectl logs -n kafka -l app=toxiproxy
+
+# Le manifest utilise /version pour les health checks
+# Si problème persiste, redéployer
+kubectl delete deployment toxiproxy -n kafka
+kubectl apply -f k8s/toxiproxy.yaml
+```
+
+**Problème : API ne répond pas**
+
+```bash
+# Tester depuis l'intérieur du cluster
+kubectl run curl --rm -it --image=curlimages/curl:8.5.0 -n kafka -- \
+  curl http://m02-java-api:8080/health
+```
 
 </details>
 
