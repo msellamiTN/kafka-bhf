@@ -18,6 +18,7 @@ spec:
       containers:
       - name: java-api
         image: m02-java-api:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 8080
         env:

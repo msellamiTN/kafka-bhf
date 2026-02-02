@@ -673,12 +673,15 @@ docker build -t m02-dotnet-api:latest -f dotnet/Dockerfile dotnet/
 docker images | grep m02
 
 # Exporter les images pour Kubernetes local
-sudo docker save m02-java-api:latest | gzip > m02-java-api.tar.gz
-sudo docker save m02-dotnet-api:latest | gzip > m02-dotnet-api.tar.gz
+sudo docker save m02-java-api:latest -o m02-java-api.tar
+sudo docker save m02-dotnet-api:latest -o m02-dotnet-api.tar
 
-# Importer les images dans le cluster Kubernetes
-sudo docker load < m02-java-api.tar.gz
-sudo docker load < m02-dotnet-api.tar.gz
+# Importer les images dans K3s (containerd)
+sudo k3s ctr images import m02-java-api.tar
+sudo k3s ctr images import m02-dotnet-api.tar
+
+# Vérifier les images importées
+sudo k3s ctr images list | grep m02
 ```
 
 Si vous utilisez un cluster Kubernetes distant, vous devez pousser ces images vers un registre accessible et modifier les manifests en conséquence.
