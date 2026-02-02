@@ -657,7 +657,23 @@ m02-dotnet-api          NodePort   10.x.x.x        <none>        8080:31081/TCP 
 toxiproxy               NodePort   10.x.x.x        <none>        8474:31474/TCP   Xs
 ```
 
-> **Note** : Les manifests utilisent les images locales `m02-java-api:latest` et `m02-dotnet-api:latest`. Assurez-vous que ces images sont disponibles dans votre cluster ou modifiez les manifests pour utiliser les bonnes références d'images.
+> **Note** : Les manifests utilisent les images locales `m02-java-api:latest` et `m02-dotnet-api:latest`. Vous devez construire ces images localement avant de déployer sur Kubernetes :
+
+```bash
+# Construire les images Docker locales
+cd formation-v2/day-01-foundations/module-02-producer-reliability
+
+# Build Java API
+docker build -t m02-java-api:latest -f java/Dockerfile java/
+
+# Build .NET API  
+docker build -t m02-dotnet-api:latest -f dotnet/Dockerfile dotnet/
+
+# Vérifier les images
+docker images | grep m02
+```
+
+Si vous utilisez un cluster Kubernetes distant, vous devez pousser ces images vers un registre accessible et modifier les manifests en conséquence.
 
 </details>
 
