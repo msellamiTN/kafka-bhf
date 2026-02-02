@@ -1136,13 +1136,14 @@ curl -fsS "http://localhost:31080/api/v1/status?requestId=$REQ_ID"
 
 Simuler des problèmes réseau pour observer le comportement des retries.
 
-> ☸️ **Note K8s** : Toxiproxy n'est pas disponible en mode K8s. Les étapes 10-13 sont spécifiques au mode Docker. Pour simuler des pannes en K8s, utilisez des outils comme `kubectl delete pod` ou des NetworkPolicies.
-
 ---
 
 ### Étape 10 - Vérification du proxy Toxiproxy
 
 **Objectif** : Confirmer que le proxy Kafka est configuré.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -1154,6 +1155,38 @@ curl -fsS http://localhost:8474/proxies | python3 -m json.tool
 - `listen`: `0.0.0.0:29093`
 - `upstream`: `kafka:29092`
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+# Obtenir l'IP du node
+NODE_IP=$(hostname -I | awk '{print $1}')
+
+# Vérifier la version de Toxiproxy
+curl -fsS http://${NODE_IP}:31474/version
+
+# Lister les proxies configurés
+curl -fsS http://${NODE_IP}:31474/proxies | python3 -m json.tool
+```
+
+**Résultat attendu** :
+
+```json
+{
+    "version": "2.9.0"
+}
+```
+
+Et un proxy nommé `kafka` avec :
+- `listen`: `0.0.0.0:29093`
+- `upstream`: `bhf-kafka-kafka-bootstrap:9092`
+
+</details>
+
 ---
 
 ### Étape 11 - Injection de latence
@@ -1161,6 +1194,9 @@ curl -fsS http://localhost:8474/proxies | python3 -m json.tool
 **Objectif** : Ajouter 5 secondes de latence sur les réponses Kafka.
 
 **Théorie** : La latence peut provoquer des **timeouts** côté producer, ce qui déclenche des **retries**.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande pour ajouter la latence** :
 
@@ -1184,11 +1220,45 @@ curl -fsS -H 'Content-Type: application/json' \
 curl -fsS http://localhost:8474/proxies/kafka/toxics
 ```
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande pour ajouter la latence** :
+
+```bash
+NODE_IP=$(hostname -I | awk '{print $1}')
+
+curl -fsS -H 'Content-Type: application/json' \
+  -X POST http://${NODE_IP}:31474/proxies/kafka/toxics \
+  -d '{
+    "name": "latency",
+    "type": "latency",
+    "stream": "downstream",
+    "attributes": {
+      "latency": 5000,
+      "jitter": 0
+    }
+  }'
+```
+
+**Vérification** :
+
+```bash
+curl -fsS http://${NODE_IP}:31474/proxies/kafka/toxics
+```
+
+</details>
+
 ---
 
 ### Étape 12 - Test avec latence
 
 **Objectif** : Observer le comportement avec la latence.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -1199,11 +1269,34 @@ time curl -fsS -X POST "http://localhost:18080/api/v1/send?mode=plain&sendMode=s
 
 **Observation** : La requête prend ~5 secondes de plus que d'habitude.
 
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+NODE_IP=$(hostname -I | awk '{print $1}')
+EVENT_ID="LATENCY-TEST-$(date +%s)"
+
+time curl -fsS -X POST "http://${NODE_IP}:31080/api/v1/send?mode=plain&sendMode=sync&eventId=$EVENT_ID"
+```
+
+**Observation** : La requête prend ~5 secondes de plus que d'habitude.
+
+> **Note** : Pour que les APIs utilisent Toxiproxy, elles doivent être configurées pour se connecter via le proxy (port 29093/32093) au lieu de directement à Kafka. Par défaut, les manifests K8s connectent les APIs directement à Kafka.
+
+</details>
+
 ---
 
 ### Étape 13 - Suppression de la latence
 
 **Objectif** : Retirer la latence pour continuer les tests.
+
+<details>
+<summary>🐳 <b>Mode Docker</b></summary>
 
 **Commande** :
 
@@ -1217,6 +1310,76 @@ curl -fsS -X DELETE http://localhost:8474/proxies/kafka/toxics/latency
 curl -fsS http://localhost:8474/proxies/kafka/toxics
 # Résultat: [] (liste vide)
 ```
+
+</details>
+
+<details>
+<summary>☸️ <b>Mode OKD/K3s</b></summary>
+
+**Commande** :
+
+```bash
+NODE_IP=$(hostname -I | awk '{print $1}')
+
+curl -fsS -X DELETE http://${NODE_IP}:31474/proxies/kafka/toxics/latency
+```
+
+**Vérification** :
+
+```bash
+curl -fsS http://${NODE_IP}:31474/proxies/kafka/toxics
+# Résultat: [] (liste vide)
+```
+
+</details>
+
+---
+
+### Alternatives K8s pour simuler des pannes
+
+En mode Kubernetes, vous pouvez également utiliser ces méthodes natives pour simuler des pannes :
+
+#### Méthode 1 : Suppression de pod (simule un crash)
+
+```bash
+# Supprimer un pod Kafka pour simuler un crash
+kubectl delete pod -n kafka -l strimzi.io/name=bhf-kafka-kafka --wait=false
+
+# Observer la récupération automatique
+kubectl get pods -n kafka -w
+```
+
+#### Méthode 2 : NetworkPolicy (simule une partition réseau)
+
+```bash
+# Créer une NetworkPolicy pour bloquer le trafic
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-kafka-traffic
+  namespace: kafka
+spec:
+  podSelector:
+    matchLabels:
+      app: m02-java-api
+  policyTypes:
+  - Egress
+  egress: []
+EOF
+
+# Tester l'envoi (devrait échouer)
+curl -X POST "http://${NODE_IP}:31080/api/v1/send?mode=plain&sendMode=sync&eventId=TEST"
+
+# Supprimer la NetworkPolicy
+kubectl delete networkpolicy block-kafka-traffic -n kafka
+```
+
+#### Méthode 3 : Chaos Engineering avec Litmus ou Chaos Mesh
+
+Pour des tests de chaos plus avancés, considérez :
+- **Litmus Chaos** : https://litmuschaos.io/
+- **Chaos Mesh** : https://chaos-mesh.org/
 
 ---
 
