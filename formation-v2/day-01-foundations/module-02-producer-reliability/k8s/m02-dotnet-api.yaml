@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: dotnet-api
-        image: ghcr.io/msellami/m02-dotnet-api:latest
+        image: docker.io/library/m02-dotnet-api:latest
         ports:
         - containerPort: 8080
         env:
