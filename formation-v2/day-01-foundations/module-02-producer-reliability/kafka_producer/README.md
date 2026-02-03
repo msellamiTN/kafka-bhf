@@ -1,34 +1,36 @@
-# Guide de Configuration - Producteur Kafka (.NET 10)
+# Guide de Configuration - Producteur Kafka (.NET 8)
 
-Ce guide vous prÈsentera Ètape par Ètape comment configurer et exÈcuter ce projet producteur Kafka basÈ sur .NET 10.
+Ce guide vous pr√©sentera √©tape par √©tape comment configurer et ex√©cuter ce projet producteur Kafka bas√© sur .NET 8 avec Confluent.Kafka.
 
-## ?? Table des MatiËres
+## üìã Table des Mati√®res
 
-1. [PrÈrequis](#-prÈrequis)
-2. [CrÈer un Nouveau Projet](#-crÈer-un-nouveau-projet-aspnet-core-api)
-3. […tapes de Configuration](#-Ètapes-de-configuration)
-4. [Utilisation de Docker](#-utilisation-de-docker)
-5. [Structure du Projet](#-structure-du-projet)
-6. [Fichier de Projet](#-fichier-de-projet-kafka_producercsproj)
-7. [RÈsolution des Erreurs](#?-rÈsolution-des-erreurs-courantes)
-8. [Commandes Utiles](#-commandes-utiles)
-9. [Secrets Utilisateur](#-secrets-utilisateur)
-10. [Ressources](#-ressources-utiles)
-11. [Checklist](#-checklist-de-vÈrification)
-12. [Conseils](#-conseils-de-dÈveloppement)
+1. [Pr√©requis](#-pr√©requis)
+2. [Cr√©er un Nouveau Projet](#-cr√©er-un-nouveau-projet-aspnet-core-api)
+3. [Configuration Kafka](#-configuration-kafka)
+4. [√âtapes de Configuration](#-√©tapes-de-configuration)
+5. [Utilisation de Docker](#-utilisation-de-docker)
+6. [Structure du Projet](#-structure-du-projet)
+7. [Fichier de Projet](#-fichier-de-projet-kafka_producercsproj)
+8. [R√©solution des Erreurs](#-r√©solution-des-erreurs-courantes)
+9. [Commandes Utiles](#-commandes-utiles)
+10. [Secrets Utilisateur](#-secrets-utilisateur)
+11. [Ressources](#-ressources-utiles)
+12. [Checklist](#-checklist-de-v√©rification)
+13. [Conseils](#-conseils-de-d√©veloppement)
 
-## ?? PrÈrequis
+## ?? Pr√©requis
 
-Avant de commencer, assurez-vous d'avoir installÈ les ÈlÈments suivants sur votre machine :
+Avant de commencer, assurez-vous d'avoir install√© les √©l√©ments suivants sur votre machine :
 
-- **.NET 10 SDK** : [TÈlÈcharger .NET 10](https://dotnet.microsoft.com/download)
-- **Visual Studio 2022** (optionnel mais recommandÈ) ou **Visual Studio Code**
+- **.NET 8 SDK** : [T√©l√©charger .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **Visual Studio 2022** (optionnel mais recommand√©) ou **Visual Studio Code**
 - **Docker Desktop** (optionnel, pour la conteneurisation)
-- **Git** : Pour cloner le rÈfÈrentiel
+- **Git** : Pour cloner le r√©f√©rentiel
+- **Kafka Cluster** : Local ou distant pour tester le producer
 
-### VÈrifier les versions installÈes
+### V√©rifier les versions install√©es
 
-Ouvrez une invite de commande ou PowerShell et exÈcutez :
+Ouvrez une invite de commande ou PowerShell et ex√©cutez :
 
 ```powershell
 dotnet --version
@@ -36,33 +38,33 @@ docker --version
 git --version
 ```
 
-## ?? CrÈer un Nouveau Projet ASP.NET Core API
+## üöÄ Cr√©er un Nouveau Projet ASP.NET Core API
 
-### MÈthode 1 : Utiliser Visual Studio 2022 (Interface Graphique)
+### M√©thode 1 : Utiliser Visual Studio 2022 (Interface Graphique)
 
-#### …tape 1 : Lancer Visual Studio 2022
+#### √âtape 1 : Lancer Visual Studio 2022
 
-![Lancer Visual Studio 2022](assets/visual_studio_create_project_api_00.png)
+![Lancer Visual Studio 2022](assets/visual_studio_launch_00.png)
 
-Ouvrez Visual Studio 2022 depuis le menu DÈmarrer ou le raccourci bureau.
+Ouvrez Visual Studio 2022 depuis le menu D√©marrer ou le raccourci bureau.
 
-#### …tape 2 : CrÈer un Nouveau Projet
+#### √âtape 2 : Cr√©er un Nouveau Projet
 
-![CrÈer un nouveau projet](assets/visual_studio_create_project_api_01.png)
+![Cr√©er un nouveau projet](assets/visual_studio_create_project_api_01.png)
 
-- Cliquez sur **"Create a new project"** ou allez ‡ **File ? New ? Project**
+- Cliquez sur **"Create a new project"** ou allez √† **File ‚Üí New ‚Üí Project**
 
-#### …tape 3 : SÈlectionner le ModËle API
+#### √âtape 3 : S√©lectionner le Mod√®le API
 
-![SÈlectionner le modËle ASP.NET Core API](assets/visual_studio_create_project_api_03.png)
+![S√©lectionner le mod√®le ASP.NET Core API](assets/visual_studio_infos_project_api_03.png)
 
 - Recherchez **"ASP.NET Core Web API"**
-- SÈlectionnez le modËle
+- S√©lectionnez le mod√®le
 - Cliquez sur **"Next"**
 
-#### …tape 4 : Configurer le Projet
+#### √âtape 4 : Configurer le Projet
 
-![Configurer le projet](assets/visual_studio_create_project_api_04.png)
+![Configurer le projet](assets/visual_studio_config_project_api_02.png)
 
 Remplissez les informations suivantes :
 
@@ -72,61 +74,138 @@ Remplissez les informations suivantes :
 - Cochez **"Place solution and project in the same directory"** (optionnel)
 - Cliquez sur **"Next"**
 
-#### …tape 5 : SÈlectionner la Version .NET
+#### √âtape 5 : S√©lectionner la Version .NET
 
-![SÈlectionner .NET 10](assets/visual_studio_create_project_api_05.png)
+![S√©lectionner .NET 8](assets/visual_studio_overviewer_project_api_04.png)
 
-- **Framework** : SÈlectionnez **".NET 10.0"**
-- **Authentication type** : Laissez ‡ **"None"**
+- **Framework** : S√©lectionnez **".NET 8.0"**
+- **Authentication type** : Laissez √† **"None"**
 - **Configure for HTTPS** : Cochez cette option
+- **Use controllers (uncheck to use minimal APIs)** : D√©cochez pour utiliser les APIs minimales
 - Cliquez sur **"Create"**
 
-#### …tape 6 : Projet CrÈÈ
+#### √âtape 6 : Projet Cr√©√©
 
-![Projet crÈÈ avec succËs](assets/visual_studio_create_project_api_06.png)
+Votre nouveau projet ASP.NET Core API est maintenant cr√©√© avec :
+- ‚úÖ Structure de base avec `Program.cs`, `Controllers/`, etc.
+- ‚úÖ Le fichier `.csproj` configur√©
+- ‚úÖ Le dossier `Properties/` avec configurations de lancement
 
-Votre nouveau projet ASP.NET Core API est maintenant crÈÈ avec :
-- ? Structure de base avec `Program.cs`, `Controllers/`, etc.
-- ? Le fichier `.csproj` configurÈ
-- ? Le dossier `Properties/` avec configurations de lancement
+### M√©thode 2 : Utiliser la Ligne de Commande (CLI)
 
-### MÈthode 2 : Utiliser la Ligne de Commande (CLI)
-
-Si vous prÈfÈrez crÈer le projet via PowerShell/Terminal :
+Si vous pr√©f√©rez cr√©er le projet via PowerShell/Terminal :
 
 ```powershell
-# Naviguer vers le rÈpertoire souhaitÈ
+# Naviguer vers le r√©pertoire souhait√©
 cd "D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\"
 
-# CrÈer un nouveau projet ASP.NET Core API
-dotnet new webapi -n kafka_producer
+# Cr√©er un nouveau projet ASP.NET Core API
+dotnet new webapi -n kafka_producer --minimal
 
 # Naviguer dans le projet
 cd kafka_producer
 
-# Restaurer les dÈpendances
+# Restaurer les d√©pendances
 dotnet restore
 
 # Lancer l'application
 dotnet run
 ```
 
-**RÈsultat** : L'application dÈmarre sur `https://localhost:5001`
+**R√©sultat** : L'application d√©marre sur `https://localhost:5001`
 
 ---
 
-## ?? …tapes de Configuration
+## ‚öôÔ∏è Configuration Kafka
 
-### …tape 1 : Cloner le RÈfÈrentiel
+### √âtape 1 : Ajouter Confluent.Kafka
+
+```powershell
+# Ajouter le package Confluent.Kafka
+dotnet add package Confluent.Kafka
+
+# V√©rifier l'installation
+dotnet list package
+```
+
+### √âtape 2 : Configurer le Producer
+
+Cr√©ez un fichier `KafkaProducerService.cs` :
+
+```csharp
+using Confluent.Kafka;
+
+public class KafkaProducerService
+{
+    private readonly IProducer<string, string> _producer;
+    
+    public KafkaProducerService()
+    {
+        var config = new ProducerConfig
+        {
+            BootstrapServers = "localhost:9092",
+            Acks = Acks.All,
+            EnableIdempotence = true,
+            MessageSendMaxRetries = 3
+        };
+        
+        _producer = new ProducerBuilder<string, string>(config).Build();
+    }
+    
+    public async Task<DeliveryResult<string, string>> SendMessageAsync(string topic, string key, string value)
+    {
+        var message = new Message<string, string>
+        {
+            Key = key,
+            Value = value
+        };
+        
+        return await _producer.ProduceAsync(topic, message);
+    }
+}
+```
+
+### √âtape 3 : Mettre √† jour Program.cs
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddSingleton<KafkaProducerService>();
+
+var app = builder.Build();
+
+// Configure Kafka endpoint
+app.MapPost("/api/kafka/send", async (KafkaProducerService producer, string topic, string key, string value) =>
+{
+    try
+    {
+        var result = await producer.SendMessageAsync(topic, key, value);
+        return Results.Ok(new { Status = "Success", Offset = result.Offset });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+});
+
+app.Run();
+```
+
+---
+
+## üîß √âtapes de Configuration
+
+### √âtape 1 : Cloner le R√©f√©rentiel
 
 ```powershell
 git clone https://github.com/msellamiTN/kafka-bhf
 cd kafka-bhf
 ```
 
-### …tape 2 : VÈrifier la Configuration NuGet
+### √âtape 2 : V√©rifier la Configuration NuGet
 
-Le fichier `nuget.config` ‡ la racine du projet configure les sources des packages NuGet. Il devrait contenir :
+Le fichier `nuget.config` √† la racine du projet configure les sources des packages NuGet. Il devrait contenir :
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -137,53 +216,53 @@ Le fichier `nuget.config` ‡ la racine du projet configure les sources des packag
 </configuration>
 ```
 
-**Important** : Ce fichier est nÈcessaire pour tÈlÈcharger les packages depuis `nuget.org`. S'il est absent ou vide, vous recevrez l'erreur `NU1100` ou `NU1101`.
+**Important** : Ce fichier est n√©cessaire pour t√©l√©charger les packages depuis `nuget.org`. S'il est absent ou vide, vous recevrez l'erreur `NU1100` ou `NU1101`.
 
-### …tape 3 : Restaurer les DÈpendances
+### √âtape 3 : Restaurer les D√©pendances
 
-Cette commande tÈlÈcharge tous les packages NuGet nÈcessaires :
+Cette commande t√©l√©charge tous les packages NuGet n√©cessaires :
 
 ```powershell
 dotnet restore
 ```
 
-**RÈsultat attendu** : Les packages doivent se tÈlÈcharger sans erreur.
+**R√©sultat attendu** : Les packages doivent se t√©l√©charger sans erreur.
 
-### …tape 4 : Construire le Projet
+### √âtape 4 : Construire le Projet
 
 ```powershell
 dotnet build
 ```
 
-**RÈsultat attendu** : Message "GÈnÈration rÈussie" (Build succeeded)
+**R√©sultat attendu** : Message "G√©n√©ration r√©ussie" (Build succeeded)
 
-### …tape 5 : ExÈcuter le Projet
+### √âtape 5 : Ex√©cuter le Projet
 
 ```powershell
 dotnet run
 ```
 
-L'application web devrait dÈmarrer et Ítre accessible ‡ l'URL affichÈe dans la console (gÈnÈralement `https://localhost:5001` ou `http://localhost:5000`).
+L'application web devrait d√©marrer et √™tre accessible √† l'URL affich√©e dans la console (g√©n√©ralement `https://localhost:5001` ou `http://localhost:5000`).
 
 ## ?? Utilisation de Docker
 
-Si vous souhaitez exÈcuter le projet dans un conteneur Docker :
+Si vous souhaitez ex√©cuter le projet dans un conteneur Docker :
 
-### …tape 1 : Construire l'Image Docker
+### √âtape 1 : Construire l'Image Docker
 
 ```powershell
 docker build -t kafka-producer:latest .
 ```
 
-### …tape 2 : ExÈcuter le Conteneur
+### √âtape 2 : Ex√©cuter le Conteneur
 
 ```powershell
 docker run -p 5000:80 --name kafka-producer kafka-producer:latest
 ```
 
-L'application sera accessible ‡ `http://localhost:5000`
+L'application sera accessible √† `http://localhost:5000`
 
-### …tape 3 : ArrÍter le Conteneur
+### √âtape 3 : Arr√™ter le Conteneur
 
 ```powershell
 docker stop kafka-producer
@@ -205,34 +284,35 @@ kafka-bhf/
 
 Le fichier `.csproj` contient la configuration de votre projet :
 
-- **TargetFramework** : `net10.0` (.NET 10)
+- **TargetFramework** : `net8.0` (.NET 8)
 - **Nullable** : `enable` (gestion stricte des valeurs nullables)
 - **ImplicitUsings** : `enable` (utilisation implicite des namespaces courants)
-- **DÈpendances** :
-  - `Microsoft.AspNetCore.OpenApi` v10.0.2
-  - `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` v1.23.0
+- **D√©pendances** :
+  - `Microsoft.AspNetCore.OpenApi` v8.0.0
+  - `Confluent.Kafka` v2.3.0
+  - `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` v1.21.0
 
-## ?? RÈsolution des Erreurs Courantes
+## ?? R√©solution des Erreurs Courantes
 
-### Erreur : "NU1100 - Impossible de rÈsoudre le package"
+### Erreur : "NU1100 - Impossible de r√©soudre le package"
 
-**Cause** : Le fichier `nuget.config` est manquant ou mal configurÈ.
+**Cause** : Le fichier `nuget.config` est manquant ou mal configur√©.
 
 **Solution** :
-1. VÈrifiez que `nuget.config` existe ‡ la racine du projet
+1. V√©rifiez que `nuget.config` existe √† la racine du projet
 2. Assurez-vous qu'il contient la source `https://api.nuget.org/v3/index.json`
-3. ExÈcutez : `dotnet restore`
+3. Ex√©cutez : `dotnet restore`
 
-### Erreur : ".NET 10 SDK non trouvÈ"
+### Erreur : ".NET 8 SDK non trouv√©"
 
-**Cause** : .NET 10 n'est pas installÈ.
+**Cause** : .NET 8 n'est pas install√©.
 
 **Solution** :
-1. TÈlÈchargez et installez [.NET 10 SDK](https://dotnet.microsoft.com/download)
-2. RedÈmarrez votre IDE et votre terminal
-3. VÈrifiez : `dotnet --version`
+1. T√©l√©chargez et installez [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+2. Red√©marrez votre IDE et votre terminal
+3. V√©rifiez : `dotnet --version`
 
-### Erreur : "Port dÈj‡ en utilisation"
+### Erreur : "Port d√©j√† en utilisation"
 
 **Cause** : Un autre processus utilise le port 5000 ou 5001.
 
@@ -241,32 +321,32 @@ Le fichier `.csproj` contient la configuration de votre projet :
 # Trouver le processus utilisant le port 5000
 netstat -ano | findstr :5000
 
-# ArrÍter le processus (remplacez PID par le numÈro trouvÈ)
+# Arr√™ter le processus (remplacez PID par le num√©ro trouv√©)
 taskkill /PID <PID> /F
 ```
 
 ## ?? Commandes Utiles
 
 ```powershell
-# Restaurer les dÈpendances
+# Restaurer les d√©pendances
 dotnet restore
 
 # Construire le projet
 dotnet build
 
-# ExÈcuter le projet en mode debug
+# Ex√©cuter le projet en mode debug
 dotnet run
 
-# ExÈcuter avec une configuration spÈcifique
+# Ex√©cuter avec une configuration sp√©cifique
 dotnet run --configuration Release
 
 # Nettoyer les fichiers de build
 dotnet clean
 
-# VÈrifier les rÈfÈrences de packages
+# V√©rifier les r√©f√©rences de packages
 dotnet list package
 
-# Mettre ‡ jour les packages
+# Mettre √† jour les packages
 dotnet package update
 ```
 
@@ -274,7 +354,7 @@ dotnet package update
 
 Le projet utilise un ID de secrets utilisateur : `a2b73e20-d132-44d8-ba05-986a35f975a2`
 
-Pour configurer les secrets en dÈveloppement :
+Pour configurer les secrets en d√©veloppement :
 
 ```powershell
 dotnet user-secrets init
@@ -283,40 +363,40 @@ dotnet user-secrets set "YourSecretKey" "YourSecretValue"
 
 ## ?? Ressources Utiles
 
-- [Documentation .NET 10](https://learn.microsoft.com/en-us/dotnet/fundamentals/)
+- [Documentation .NET 8](https://learn.microsoft.com/en-us/dotnet/fundamentals/)
 - [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
 - [Docker Documentation](https://docs.docker.com/)
 - [NuGet.org](https://www.nuget.org/)
 
-## ? Checklist de VÈrification
+## ? Checklist de V√©rification
 
-Avant de dÈployer votre application, assurez-vous que :
+Avant de d√©ployer votre application, assurez-vous que :
 
-- [ ] .NET 10 SDK est installÈ
-- [ ] `nuget.config` est prÈsent ‡ la racine du projet
-- [ ] `dotnet restore` s'exÈcute sans erreur
-- [ ] `dotnet build` rÈussit
-- [ ] `dotnet run` dÈmarre l'application
+- [ ] .NET 8 SDK est install√©
+- [ ] `nuget.config` est pr√©sent √† la racine du projet
+- [ ] `dotnet restore` s'ex√©cute sans erreur
+- [ ] `dotnet build` r√©ussit
+- [ ] `dotnet run` d√©marre l'application
 - [ ] L'application est accessible sur le navigateur
-- [ ] Docker fonctionne correctement (si utilisÈ)
+- [ ] Docker fonctionne correctement (si utilis√©)
 - [ ] Les images sont visibles dans le dossier `assets/`
 
-## ?? Conseils de DÈveloppement
+## ?? Conseils de D√©veloppement
 
-1. **Utilisez Visual Studio 2022** pour une meilleure expÈrience de dÈveloppement
-2. **Activez les secrets utilisateur** pour gÈrer les donnÈes sensibles
-3. **Testez localement avant le dÈploiement** en Docker
-4. **Maintenez vos packages ‡ jour** rÈguliËrement
+1. **Utilisez Visual Studio 2022** pour une meilleure exp√©rience de d√©veloppement
+2. **Activez les secrets utilisateur** pour g√©rer les donn√©es sensibles
+3. **Testez localement avant le d√©ploiement** en Docker
+4. **Maintenez vos packages √† jour** r√©guli√®rement
 5. **Documentez votre code** avec des commentaires significatifs
 6. **Utilisez Git** pour versionner votre code
 
 ## ?? Support
 
-Pour toute question ou problËme, consultez :
+Pour toute question ou probl√®me, consultez :
 - Les issues sur [GitHub](https://github.com/msellamiTN/kafka-bhf/issues)
 - La documentation officielle [.NET 10](https://learn.microsoft.com/en-us/dotnet/)
 - [Visual Studio 2022 Documentation](https://learn.microsoft.com/en-us/visualstudio/)
-- Les forums de la communautÈ .NET sur Stack Overflow
+- Les forums de la communaut√© .NET sur Stack Overflow
 
 ## ?? Structure des Fichiers
 
@@ -328,9 +408,9 @@ kafka-bhf/
 ??? assets/                          # Dossier pour les images
 ?   ??? IMAGES_GUIDE.md             # Guide des images
 ?   ??? README_IMAGES.md            # Instructions d'ajout d'images
-?   ??? visual_studio_create_project_api_00.png  # …cran d'accueil VS
-?   ??? visual_studio_create_project_api_01.png  # CrÈer nouveau projet
-?   ??? visual_studio_create_project_api_03.png  # SÈlectionner modËle
+?   ??? visual_studio_create_project_api_00.png  # √âcran d'accueil VS
+?   ??? visual_studio_create_project_api_01.png  # Cr√©er nouveau projet
+?   ??? visual_studio_create_project_api_03.png  # S√©lectionner mod√®le
 ?   ??? visual_studio_create_project_api_04.png  # Configurer projet
 ??? formation-v2/
 ?   ??? day-01-foundations/
@@ -341,11 +421,11 @@ kafka-bhf/
 ?               ??? Properties/
 ?               ??? Controllers/
 ?               ??? ...
-??? [autres rÈpertoires]
+??? [autres r√©pertoires]
 ```
 
 ---
 
-**DerniËre mise ‡ jour** : 2024
-**Version .NET cible** : .NET 10
-**Statut** : ? Guide complet avec placeholders pour images
+**Derni√®re mise √† jour** : 2025
+**Version .NET cible** : .NET 8
+**Statut** : ‚úÖ Guide complet avec images et configuration Kafka
