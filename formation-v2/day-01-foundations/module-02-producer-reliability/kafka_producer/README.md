@@ -105,11 +105,14 @@ Si vous préférez créer le projet via PowerShell/Terminal :
 # Naviguer vers le répertoire souhaité
 cd "D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\"
 
-# Créer un nouveau projet ASP.NET Core API avec .NET 8
-dotnet new webapi -n kafka_producer --framework net8.0 --minimal --no-https false
+# Créer un nouveau projet ASP.NET Core API
+dotnet new webapi -n kafka_producer
 
 # Naviguer dans le projet
 cd kafka_producer
+
+# Mettre à jour le fichier .csproj pour .NET 8
+# Ouvrez kafka_producer.csproj et changez <TargetFramework>net10.0</TargetFramework> en <TargetFramework>net8.0</TargetFramework>
 
 # Restaurer les dépendances
 dotnet restore
@@ -123,10 +126,20 @@ dotnet run
 
 **Options CLI expliquées** :
 - `-n kafka_producer` : Nom du projet
-- `--framework net8.0` : Cible .NET 8.0
-- `--minimal` : Utilise les APIs minimales (pas de contrôleurs)
-- `--no-https false` : Active HTTPS (équivalent à cocher "Configure for HTTPS")
-- `--use-controllers false` : Désactive les contrôleurs (APIs minimales)
+- Le template par défaut crée un projet .NET 10.0 (doit être modifié manuellement pour .NET 8)
+- Les contrôleurs sont utilisés par défaut (peut être modifié pour APIs minimales)
+- HTTPS est activé par défaut
+- OpenAPI (Swagger) est activé par défaut
+
+**Modification manuelle requise** :
+Après la création, ouvrez `kafka_producer.csproj` et modifiez :
+```xml
+<!-- Avant -->
+<TargetFramework>net10.0</TargetFramework>
+
+<!-- Après -->
+<TargetFramework>net8.0</TargetFramework>
+```
 
 **Résultat** : L'application démarre sur `https://localhost:5001` ou `http://localhost:5000`
 
