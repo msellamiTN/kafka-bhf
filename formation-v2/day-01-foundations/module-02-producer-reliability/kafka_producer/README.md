@@ -44,19 +44,19 @@ git --version
 
 #### Étape 1 : Lancer Visual Studio 2022
 
-![Lancer Visual Studio 2022](assets/visual_studio_launch_00.png)
+![Lancer Visual Studio 2022](assets/01-visual-studio-launch.png)
 
 Ouvrez Visual Studio 2022 depuis le menu Démarrer ou le raccourci bureau.
 
 #### Étape 2 : Créer un Nouveau Projet
 
-![Créer un nouveau projet](assets/visual_studio_create_project_api_01.png)
+![Créer un nouveau projet](assets/02-create-new-project.png)
 
 - Cliquez sur **"Create a new project"** ou allez à **File → New → Project**
 
 #### Étape 3 : Sélectionner le Modèle API
 
-![Sélectionner le modèle ASP.NET Core Web API](assets/visual_studio_infos_project_api_03.png)
+![Sélectionner le modèle ASP.NET Core Web API](assets/03-select-api-template.png)
 
 - Recherchez **"ASP.NET Core Web API"**
 - Sélectionnez le modèle
@@ -64,7 +64,7 @@ Ouvrez Visual Studio 2022 depuis le menu Démarrer ou le raccourci bureau.
 
 #### Étape 4 : Configurer le Projet
 
-![Configurer le projet](assets/visual_studio_config_project_api_02.png)
+![Configurer le projet](assets/04-configure-project.png)
 
 Remplissez les informations suivantes :
 
@@ -76,7 +76,7 @@ Remplissez les informations suivantes :
 
 #### Étape 5 : Informations Supplémentaires
 
-![Sélectionner .NET 8 et options](assets/visual_studio_overviewer_project_api_04.png)
+![Sélectionner .NET 8 et options](assets/05-infos-dotnet-container.png)
 
 Configurez les options suivantes :
 
@@ -88,6 +88,8 @@ Configurez les options suivantes :
 - Cliquez sur **"Create"**
 
 #### Étape 6 : Projet Créé
+
+![Projet créé avec succès](assets/06-project-created.png)
 
 Votre nouveau projet ASP.NET Core API est maintenant créé avec :
 - ✅ Structure de base avec `Program.cs`, `Controllers/`, etc.

@@ -1,22 +1,22 @@
-# ??? Images du Guide - Instructions d'Ajout
+# ðŸ“¸ Images du Guide - Instructions d'Ajout
 
-Ce fichier placeholder indique comment ajouter les images capturées au dossier `assets/`.
+Ce fichier placeholder indique comment ajouter les images capturÃ©es au dossier `assets/`.
 
-## ?? Images à Ajouter
+## ðŸ“‹ Images Ã  Ajouter
 
 Placez les fichiers suivants dans le dossier `assets/` :
 
 1. **01-visual-studio-launch.png**
-   - Screenshot de Visual Studio 2022 au démarrage
-   - Afficher l'écran d'accueil avec "Create a new project"
+   - Screenshot de Visual Studio 2022 au dÃ©marrage
+   - Afficher l'Ã©cran d'accueil avec "Create a new project"
 
 2. **02-create-new-project.png**
    - Screenshot du dialog "Create a new project"
-   - Montrer où cliquer pour créer un nouveau projet
+   - Montrer oÃ¹ cliquer pour crÃ©er un nouveau projet
 
 3. **03-select-api-template.png**
-   - Screenshot après avoir tapé "ASP.NET Core Web API"
-   - Mettre en évidence le modèle à sélectionner
+   - Screenshot aprÃ¨s avoir tapÃ© "ASP.NET Core Web API"
+   - Mettre en Ã©vidence le modÃ¨le Ã  sÃ©lectionner
 
 4. **04-configure-project.png**
    - Screenshot du formulaire de configuration
@@ -24,54 +24,55 @@ Placez les fichiers suivants dans le dossier `assets/` :
      - Project name: `kafka_producer`
      - Location: `D:\Data2AI Academy\Kafka\kafka-bhf\...`
 
-5. **05-select-dotnet-version.png**
+5. **05-infos-dotnet-container.png**
    - Screenshot de la page "Additional information"
-   - Montrer .NET 10.0 sélectionné
-   - HTTPS configuré
+   - Montrer .NET 8.0 sÃ©lectionnÃ©
+   - HTTPS configurÃ©
+   - OpenAPI support cochÃ©
 
 6. **06-project-created.png**
    - Screenshot du Solution Explorer
-   - Afficher la structure du projet créé
+   - Afficher la structure du projet crÃ©Ã©
 
-## ?? Comment Capturer
+## ðŸ“¸ Comment Capturer
 
-### Étape 1 : Préparer Visual Studio
+### Ã‰tape 1 : PrÃ©parer Visual Studio
 1. Ouvrez Visual Studio 2022
-2. Allez à **File ? New ? Project**
-3. Suivez les étapes normales de création
+2. Allez Ã  **File â†’ New â†’ Project**
+3. Suivez les Ã©tapes normales de crÃ©ation
 
-### Étape 2 : Capturer les Screenshots
+### Ã‰tape 2 : Capturer les Screenshots
 - **Windows** : `Win + Shift + S` pour capturer une zone
 - Sauvegardez en PNG dans ce dossier
 - Nommez selon la convention `XX-description.png`
 
-### Étape 3 : Optimiser
+### Ã‰tape 3 : Optimiser
 - Utilisez [TinyPNG](https://tinypng.com/) pour compresser
-- Taille recommandée : < 500 KB par image
+- Taille recommandÃ©e : < 500 KB par image
 
-## ? Étapes Complètes
+## âœ… Ã‰tapes ComplÃ¨tes
 
-- [ ] Capture 01 ajoutée
-- [ ] Capture 02 ajoutée
-- [ ] Capture 03 ajoutée
-- [ ] Capture 04 ajoutée
-- [ ] Capture 05 ajoutée
-- [ ] Capture 06 ajoutée
-- [ ] Toutes les images optimisées
+- [ ] Capture 01 ajoutÃ©e
+- [ ] Capture 02 ajoutÃ©e
+- [ ] Capture 03 ajoutÃ©e
+- [ ] Capture 04 ajoutÃ©e
+- [ ] Capture 05 ajoutÃ©e
+- [ ] Capture 06 ajoutÃ©e
+- [ ] Toutes les images optimisÃ©es
 - [ ] README affiche correctement les images
 
-## ?? Vérifier les Images
+## ðŸ” VÃ©rifier les Images
 
-Après avoir ajouté les images, vérifiez que les liens fonctionnent :
+AprÃ¨s avoir ajoutÃ© les images, vÃ©rifiez que les liens fonctionnent :
 
 ```bash
-# Vérifier que les fichiers existent
+# VÃ©rifier que les fichiers existent
 dir assets/
 
-# Vérifier que le README les affiche
+# VÃ©rifier que le README les affiche
 # Ouvrez README.md avec un lecteur markdown
 ```
 
 ---
 
-**Note** : Les images seront affichées automatiquement sur GitHub une fois dans le dossier `assets/`.
+**Note** : Les images seront affichÃ©es automatiquement sur GitHub une fois dans le dossier `assets/`.
