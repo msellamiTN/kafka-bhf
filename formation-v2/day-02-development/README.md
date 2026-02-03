@@ -21,7 +21,26 @@
 
 ---
 
-## 📚 Concepts fondamentaux
+## �️ Phase de Développement .NET avec Kafka
+
+### 🎯 Objectif
+Ce module est conçu pour les développeurs .NET BHF souhaitant maîtriser l'intégration Kafka dans leurs applications. Vous apprendrez à développer un Producer Kafka fiable, puis à le déployer et tester dans des environnements Docker et Kubernetes.
+
+> **Note** : Cette phase est recommandée pour comprendre en profondeur l'intégration Kafka. Si vous voulez simplement déployer et tester, passez directement au Lab 02.0.
+
+### 📚 Parcours d'Apprentissage Intégré
+
+**Étape 1 → Étape 2 → Étape 3 → Étape 4 → Étape 5**
+
+#### 🎓 Tutoriel Complet .NET (Day 01)
+- **Référence** : [TUTORIAL_COMPLET.md](../day-01-foundations/module-02-producer-reliability/kafka_producer/TUTORIAL_COMPLET.md)
+- **Focus** : Producteur .NET 8 pour K8s/Docker BHF
+- **Contenu** : Architecture complète, déploiement, chaos engineering
+- **Environnement** : Docker/Kubernetes avec Toxiproxy
+
+---
+
+## �📚 Concepts fondamentaux
 
 ### Dead Letter Topic (DLT)
 
@@ -195,10 +214,23 @@ flowchart TB
 
 ## 📦 Modules
 
-| Module | Titre | Durée | Description |
-|--------|-------|-------|-------------|
-| [**M04**](./module-04-advanced-patterns/README.md) | Patterns Avancés | 90-120 min | DLT, Retry, Rebalancing |
-| [**M05**](./module-05-kafka-streams/README.md) | Kafka Streams | 90-120 min | KStream, KTable, Aggregations |
+| Module | Titre | Durée | Description | Tutoriels |
+|--------|-------|-------|-------------|-----------|
+| [**M04**](./module-04-advanced-patterns/README.md) | Patterns Avancés | 90-120 min | DLT, Retry, Rebalancing | [☕ Java](../day-01-foundations/module-02-producer-reliability/TUTORIAL-JAVA.md) \| [🔷 .NET](../day-01-foundations/module-02-producer-reliability/kafka_producer/TUTORIAL_COMPLET.md) |
+| [**M05**](./module-05-kafka-streams/README.md) | Kafka Streams | 90-120 min | KStream, KTable, Aggregations | - |
+
+### 📚 Tutoriels de Référence
+
+#### ☕ Java Producer (Day 01)
+- **Tutoriel Complet** : [TUTORIAL-JAVA.md](../day-01-foundations/module-02-producer-reliability/TUTORIAL-JAVA.md)
+- **Focus** : Producer fiable, idempotence, retries
+- **Patterns** : Plain vs Idempotent, Synchrone vs Asynchrone
+
+#### 🔷 .NET Producer (Day 01)
+- **Tutoriel Complet** : [TUTORIAL_COMPLET.md](../day-01-foundations/module-02-producer-reliability/kafka_producer/TUTORIAL_COMPLET.md)
+- **Focus** : Producteur .NET 8 pour K8s/Docker BHF
+- **Patterns** : Architecture complète, déploiement, chaos engineering
+- **Environnement** : Docker/Kubernetes avec Toxiproxy
 
 ---
 
