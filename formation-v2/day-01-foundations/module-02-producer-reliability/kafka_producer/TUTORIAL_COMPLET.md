@@ -218,8 +218,7 @@ dotnet add package Confluent.Kafka
 ### 2.2 Créer le Service Kafka
 
 Créez le fichier `Services/KafkaProducerService.cs` :
-
-![Créez le fichier](assets\07-creer-service-Kafka.png)
+![Créez le fichier](assets/07-creer-service-Kafka.png)
 
 ```csharp
 using Confluent.Kafka;
