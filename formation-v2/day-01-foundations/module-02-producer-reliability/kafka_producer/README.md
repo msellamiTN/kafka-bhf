@@ -18,7 +18,7 @@ Ce guide vous présentera étape par étape comment configurer et exécuter ce p
 12. [Checklist](#-checklist-de-vérification)
 13. [Conseils](#-conseils-de-développement)
 
-## ?? Prérequis
+## 📋 Prérequis
 
 Avant de commencer, assurez-vous d'avoir installé les éléments suivants sur votre machine :
 
@@ -244,7 +244,7 @@ dotnet run
 
 L'application web devrait démarrer et être accessible à l'URL affichée dans la console (généralement `https://localhost:5001` ou `http://localhost:5000`).
 
-## ?? Utilisation de Docker
+## 🐳 Utilisation de Docker
 
 Si vous souhaitez exécuter le projet dans un conteneur Docker :
 
@@ -269,30 +269,26 @@ docker stop kafka-producer
 docker rm kafka-producer
 ```
 
-## ?? Structure du Projet
+## 📁 Structure du Projet
 
 ```
 kafka-bhf/
 ??? kafka_producer.csproj      # Fichier de configuration du projet
 ??? nuget.config               # Configuration des sources NuGet
-??? Dockerfile                 # Configuration Docker
-??? README.md                  # Ce fichier
 ??? [autres fichiers source]
-```
 
-## ?? Fichier de Projet (kafka_producer.csproj)
+## 📄 Fichier de Projet (kafka_producer.csproj)
 
 Le fichier `.csproj` contient la configuration de votre projet :
 
 - **TargetFramework** : `net8.0` (.NET 8)
 - **Nullable** : `enable` (gestion stricte des valeurs nullables)
-- **ImplicitUsings** : `enable` (utilisation implicite des namespaces courants)
 - **Dépendances** :
   - `Microsoft.AspNetCore.OpenApi` v8.0.0
   - `Confluent.Kafka` v2.3.0
   - `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` v1.21.0
 
-## ?? Résolution des Erreurs Courantes
+## 🛠️ Résolution des Erreurs Courantes
 
 ### Erreur : "NU1100 - Impossible de résoudre le package"
 
@@ -325,7 +321,7 @@ netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 ```
 
-## ?? Commandes Utiles
+## ⚡ Commandes Utiles
 
 ```powershell
 # Restaurer les dépendances
@@ -350,7 +346,7 @@ dotnet list package
 dotnet package update
 ```
 
-## ?? Secrets Utilisateur
+## 🔐 Secrets Utilisateur
 
 Le projet utilise un ID de secrets utilisateur : `a2b73e20-d132-44d8-ba05-986a35f975a2`
 
@@ -361,14 +357,14 @@ dotnet user-secrets init
 dotnet user-secrets set "YourSecretKey" "YourSecretValue"
 ```
 
-## ?? Ressources Utiles
+## 📚 Ressources Utiles
 
 - [Documentation .NET 8](https://learn.microsoft.com/en-us/dotnet/fundamentals/)
 - [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
 - [Docker Documentation](https://docs.docker.com/)
 - [NuGet.org](https://www.nuget.org/)
 
-## ? Checklist de Vérification
+## ✅ Checklist de Vérification
 
 Avant de déployer votre application, assurez-vous que :
 
@@ -381,7 +377,7 @@ Avant de déployer votre application, assurez-vous que :
 - [ ] Docker fonctionne correctement (si utilisé)
 - [ ] Les images sont visibles dans le dossier `assets/`
 
-## ?? Conseils de Développement
+## 💡 Conseils de Développement
 
 1. **Utilisez Visual Studio 2022** pour une meilleure expérience de développement
 2. **Activez les secrets utilisateur** pour gérer les données sensibles
@@ -390,7 +386,7 @@ Avant de déployer votre application, assurez-vous que :
 5. **Documentez votre code** avec des commentaires significatifs
 6. **Utilisez Git** pour versionner votre code
 
-## ?? Support
+## 📞 Support
 
 Pour toute question ou problème, consultez :
 - Les issues sur [GitHub](https://github.com/msellamiTN/kafka-bhf/issues)
@@ -398,7 +394,7 @@ Pour toute question ou problème, consultez :
 - [Visual Studio 2022 Documentation](https://learn.microsoft.com/en-us/visualstudio/)
 - Les forums de la communauté .NET sur Stack Overflow
 
-## ?? Structure des Fichiers
+## 📂 Structure des Fichiers
 
 ```
 kafka-bhf/
