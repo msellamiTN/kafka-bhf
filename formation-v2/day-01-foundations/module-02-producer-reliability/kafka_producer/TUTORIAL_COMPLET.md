@@ -8,9 +8,39 @@ Cet atelier pratique vous guide pas à pas pour implémenter un **Producteur Kaf
 - 🎯 Comprendre l'architecture complète d'un producteur Kafka
 - 🔧 Maîtriser les concepts de fiabilité (idempotence, acks, retries)
 - 🚀 Implémenter des patterns avancés (synchrone/asynchrone)
-- � Déployer en production avec Docker/Kubernetes
+- 🐳 Déployer en production avec Docker/Kubernetes
 - 🧪 Tester et valider la fiabilité dans l'environnement BHF
 - 🛡️ Simuler des pannes réseau avec Toxiproxy
+
+## 📂 Structure du Module
+
+Ce module contient **deux projets .NET** :
+
+```text
+module-02-producer-reliability/
+├── kafka_producer/          # 📚 Projet pédagogique (Visual Studio)
+│   ├── Services/            # KafkaProducerService.cs
+│   ├── Controllers/         # API Controllers
+│   ├── Program.cs
+│   ├── Dockerfile
+│   └── TUTORIAL_COMPLET.md  # ⬅ Vous êtes ici
+├── dotnet/                  # 🚀 API Production pour K8s
+│   ├── Program.cs           # Minimal API
+│   └── Dockerfile
+├── java/                    # API Java Spring Boot
+├── k8s/                     # Manifests Kubernetes
+└── scripts/k8s/             # Scripts de déploiement K8s
+    ├── 00-full-deploy.sh    # Pipeline complet
+    ├── 01-build-images.sh   # Build Docker images
+    ├── 02-import-images.sh  # Import dans K3s
+    ├── 03-deploy.sh         # Déploiement K8s
+    ├── 04-validate.sh       # Validation
+    ├── 05-test-apis.sh      # Tests des APIs
+    └── 06-cleanup.sh        # Nettoyage
+```
+
+> **Note** : Le projet `kafka_producer/` est utilisé pour l'apprentissage avec Visual Studio.
+> Le projet `dotnet/` est l'API de production déployée sur K8s.
 
 ---
 
@@ -584,239 +614,223 @@ app.MapGet("/api/v1/metrics", (IKafkaProducerService producerService) =>
 
 # 🐳 Module 4 : Déploiement Docker/Kubernetes BHF
 
-## 📦 Dockerisation pour BHF
+## 📦 Dockerfile de Production (dotnet/)
 
-### Créer Dockerfile (Optimisé pour K8s)
+Le Dockerfile de production utilisé pour K8s se trouve dans `../dotnet/Dockerfile` :
 
 ```dockerfile
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-WORKDIR /app
-EXPOSE 8080
-EXPOSE 8443
-
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+
 WORKDIR /src
-COPY ["kafka_producer.csproj", "./"]
-RUN dotnet restore "./kafka_producer.csproj"
-COPY . .
-WORKDIR "/src/."
-RUN dotnet build "kafka_producer.csproj" -c Release -o /app/build
 
-FROM build AS publish
-RUN dotnet publish "kafka_producer.csproj" -c Release -o /app/publish /p:UseAppHost=false
+COPY *.csproj ./
+RUN dotnet restore
 
-FROM base AS final
+COPY . ./
+RUN dotnet publish -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish ./
 
-# Configuration pour K8s
-ENV ASPNETCORE_URLS=http://+:8080
-ENV ASPNETCORE_ENVIRONMENT=Production
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "kafka_producer.dll"]
+ENTRYPOINT ["dotnet","M02ProducerReliability.Api.dll"]
 ```
 
-### Construire et Exécuter (Local Docker)
+## ☸️ Déploiement Kubernetes BHF avec Scripts
+
+### Option 1 : Déploiement Complet (Recommandé)
 
 ```bash
-# Construire l'image
-docker build -t kafka-producer-dotnet .
+# Naviguer vers les scripts K8s
+cd scripts/k8s
+chmod +x *.sh
 
-# Exécuter avec Kafka BHF
-docker run -d \
-  --name kafka-producer \
-  -p 18081:8080 \
-  -e Kafka__BootstrapServers=localhost:9092 \
-  kafka-producer-dotnet
+# Exécuter le pipeline complet
+sudo ./00-full-deploy.sh
 ```
 
-## ☸️ Déploiement Kubernetes BHF
-
-### Créer le déploiement K8s
-
-```yaml
-# k8s/dotnet-api.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dotnet-api
-  labels:
-    app: dotnet-api
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: dotnet-api
-  template:
-    metadata:
-      labels:
-        app: dotnet-api
-    spec:
-      containers:
-      - name: dotnet-api
-        image: kafka-producer-dotnet:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: Kafka__BootstrapServers
-          value: "kafka:9092"
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Production"
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dotnet-api
-spec:
-  selector:
-    app: dotnet-api
-  ports:
-  - port: 8080
-    targetPort: 8080
-  type: ClusterIP
-```
-
-### Déployer sur K8s
+### Option 2 : Étape par Étape
 
 ```bash
-# Construire l'image pour K8s
-docker build -t kafka-producer-dotnet:latest .
+cd scripts/k8s
+chmod +x *.sh
 
-# Si using K3s, importer l'image
-k3s ctr images import kafka-producer-dotnet.tar
+# 1. Construire les images Docker
+./01-build-images.sh
+# → Construit m02-java-api:latest et m02-dotnet-api:latest
 
-# Déployer
-kubectl apply -f k8s/dotnet-api.yaml
+# 2. Importer dans K3s (nécessite sudo)
+sudo ./02-import-images.sh
+# → Exporte et importe les images dans containerd
 
-# Vérifier
-kubectl get pods -l app=dotnet-api
-kubectl get svc dotnet-api
+# 3. Déployer sur Kubernetes
+./03-deploy.sh
+# → Applique les manifests K8s dans le namespace kafka
+
+# 4. Valider le déploiement
+./04-validate.sh
+# → Vérifie que tous les pods sont Running
+
+# 5. Tester les APIs
+./05-test-apis.sh
+# → Exécute les tests de santé et d'envoi de messages
 ```
 
-### Docker Compose BHF (Développement)
+## 🌐 Architecture K8s Déployée
 
-```yaml
-# docker-compose.dev.yml
-version: '3.8'
-services:
-  kafka-producer:
-    build: .
-    ports:
-      - "18081:8080"
-    environment:
-      - Kafka__BootstrapServers=kafka:9092
-      - ASPNETCORE_ENVIRONMENT=Development
-    depends_on:
-      - kafka
-    networks:
-      - bhf-kafka-network
-    volumes:
-      - ./appsettings.Development.json:/app/appsettings.Development.json
-
-networks:
-  bhf-kafka-network:
-    external: true
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     Kubernetes Cluster                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │   Java API      │  │   .NET API      │  │  Toxiproxy  │  │
+│  │   NodePort:     │  │   NodePort:     │  │  NodePort:  │  │
+│  │   31080         │  │   31081         │  │  31474      │  │
+│  └────────┬────────┘  └────────┬────────┘  └──────┬──────┘  │
+│           │                    │                   │         │
+│           └────────────────────┼───────────────────┘         │
+│                                │                             │
+│                    ┌───────────▼───────────┐                 │
+│                    │   Kafka Bootstrap     │                 │
+│                    │   bhf-kafka:9092      │                 │
+│                    └───────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+### Ports et Services
+
+| Service | NodePort | Service Interne | Description |
+|---------|----------|-----------------|-------------|
+| Java API | 31080 | m02-java-api:8080 | Spring Boot Kafka producer |
+| .NET API | 31081 | m02-dotnet-api:8080 | ASP.NET Kafka producer |
+| Toxiproxy API | 31474 | toxiproxy:8474 | API de gestion Toxiproxy |
+| Toxiproxy Proxy | 32093 | toxiproxy:29093 | Proxy Kafka avec latence |
 
 ---
 
 # 🧪 Module 5 : Tests et Validation BHF
 
+## 🌐 Endpoints de l'API de Production
+
+L'API de production utilise des **paramètres de requête** (query params) :
+
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/health` | GET | Health check |
+| `/api/v1/send` | POST | Envoi de message |
+| `/api/v1/status` | GET | Statut d'une requête async |
+
+### Paramètres de `/api/v1/send`
+
+| Paramètre | Requis | Valeurs | Description |
+|-----------|--------|---------|-------------|
+| `mode` | ✅ | `plain`, `idempotent` | Mode de production |
+| `eventId` | ✅ | string | ID unique de l'événement |
+| `topic` | ❌ | string | Topic Kafka (défaut: `bhf-transactions`) |
+| `sendMode` | ❌ | `sync`, `async` | Mode d'envoi (défaut: `sync`) |
+| `key` | ❌ | string | Clé du message (défaut: eventId) |
+
 ## 🎯 Scénarios de Test Complets
 
-### Test 1 : Validation de la Fiabilité (Local Docker)
+### Test 1 : Health Check
 
 ```bash
-#!/bin/bash
-# Script de test de fiabilité BHF
+# Obtenir l'IP du noeud K8s
+NODE_IP=$(hostname -I | awk '{print $1}')
 
-echo "🧪 Test 1: Mode Plain (Fire & Forget)"
-curl -X POST "http://localhost:18081/api/v1/test/plain" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"reliability-test","key":"plain-1","message":"Plain test message 1"}'
+# Test Health - Java API
+curl http://${NODE_IP}:31080/health
 
-echo "🧪 Test 2: Mode Idempotent (Garanti)"
-curl -X POST "http://localhost:18081/api/v1/test/idempotent" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"reliability-test","key":"idempotent-1","message":"Idempotent test message 1"}'
-
-echo "🧪 Test 3: Mode Asynchrone Haute Performance"
-curl -X POST "http://localhost:18081/api/v1/test/plain-async" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"performance-test","key":"async-1","message":"Async test message 1"}'
-
-echo "🧪 Test 4: Mode Idempotent Asynchrone"
-curl -X POST "http://localhost:18081/api/v1/test/idempotent-async" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"performance-test","key":"idempotent-async-1","message":"Idempotent async test message 1"}'
+# Test Health - .NET API
+curl http://${NODE_IP}:31081/health
 ```
 
-### Test 2 : Validation des Performances (K8s)
+### Test 2 : Mode Idempotent (Recommandé)
+
+```bash
+# .NET API - Mode Idempotent Synchrone
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=TEST-DOTNET-001&sendMode=sync"
+
+# Java API - Mode Idempotent Synchrone
+curl -X POST "http://${NODE_IP}:31080/api/v1/send?mode=idempotent&eventId=TEST-JAVA-001&sendMode=sync"
+```
+
+**Réponse attendue :**
+
+```json
+{
+  "eventId": "TEST-DOTNET-001",
+  "mode": "idempotent",
+  "sendMode": "sync",
+  "topic": "bhf-transactions",
+  "partition": 2,
+  "offset": 0
+}
+```
+
+### Test 3 : Mode Plain (Fire & Forget)
+
+```bash
+# .NET API - Mode Plain (risque de doublons)
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=plain&eventId=TEST-PLAIN-001&sendMode=sync"
+```
+
+### Test 4 : Mode Asynchrone
+
+```bash
+# .NET API - Mode Async (retourne immédiatement)
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=TEST-ASYNC-001&sendMode=async"
+
+# Réponse: {"requestId": "xxx", "state": "PENDING", ...}
+
+# Vérifier le statut
+curl "http://${NODE_IP}:31081/api/v1/status?requestId=xxx"
+```
+
+### Test 5 : Script de Validation Complet
+
+Utilisez le script fourni :
+
+```bash
+cd scripts/k8s
+./05-test-apis.sh
+```
+
+### Test 6 : Test de Charge
 
 ```bash
 #!/bin/bash
-# Test de charge avec 100 messages sur K8s
+# Test de charge avec 100 messages
 
-# Obtenir l'IP du service K8s
-SERVICE_IP=$(kubectl get svc dotnet-api -o jsonpath='{.spec.clusterIP}')
+NODE_IP=$(hostname -I | awk '{print $1}')
 
-echo "🚀 Test de charge : 100 messages en mode idempotent sur K8s"
+echo "🚀 Test de charge : 100 messages en mode idempotent"
 for i in {1..100}
 do
-  curl -X POST "http://$SERVICE_IP:8080/api/v1/test/idempotent" \
-       -H "Content-Type: application/json" \
-       -d "{\"topic\":\"load-test\",\"key\":\"load-$i\",\"message\":\"Load test message $i\"}" &
+  curl -s -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=LOAD-$i&sendMode=sync" &
 done
 
 wait
 echo "✅ Test de charge terminé"
 ```
 
-### Test 3 : Validation des Erreurs
+## 🛡️ Module 6 : Tests de Pannes avec Toxiproxy BHF
+
+Toxiproxy est déployé automatiquement avec les scripts K8s et permet de simuler des pannes réseau.
+
+### Accès Toxiproxy
 
 ```bash
-#!/bin/bash
-# Test avec topic inexistant
+NODE_IP=$(hostname -I | awk '{print $1}')
 
-echo "❌ Test d'erreur : Topic inexistant"
-curl -X POST "http://localhost:18081/api/v1/test/plain" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"nonexistent-topic","key":"error-test","message":"This should fail"}'
-```
+# Vérifier la version de Toxiproxy
+curl http://${NODE_IP}:31474/version
 
-## �️ Module 6 : Tests de Pannes avec Toxiproxy BHF
-
-### Configuration Toxiproxy pour .NET API
-
-```bash
-# Créer le proxy pour l'API .NET
-curl -X POST http://localhost:8474/proxies \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "dotnet-api-proxy",
-    "listen": "0.0.0.0:29093",
-    "upstream": "kafka:9092",
-    "enabled": true
-  }'
+# Lister les proxies existants
+curl http://${NODE_IP}:31474/proxies
 ```
 
 ### Scénarios de Test de Pannes
@@ -824,8 +838,10 @@ curl -X POST http://localhost:8474/proxies \
 #### 6.1 Test de Latence
 
 ```bash
-# Ajouter 5 secondes de latence
-curl -X POST http://localhost:8474/proxies/dotnet-api-proxy/toxics \
+NODE_IP=$(hostname -I | awk '{print $1}')
+
+# Ajouter 5 secondes de latence au proxy Kafka
+curl -X POST http://${NODE_IP}:31474/proxies/kafka-proxy/toxics \
   -H "Content-Type: application/json" \
   -d '{
     "name": "latency_5s",
@@ -839,17 +855,15 @@ curl -X POST http://localhost:8474/proxies/dotnet-api-proxy/toxics \
 
 # Tester avec latence
 echo "🐌 Test avec latence 5s"
-curl -X POST "http://localhost:18081/api/v1/test/idempotent" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"latency-test","key":"latency-1","message":"Test with latency"}' \
-  --max-time 10
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=LATENCY-TEST-001&sendMode=sync" \
+  --max-time 15
 ```
 
 #### 6.2 Test de Timeout
 
 ```bash
 # Ajouter un timeout de 2 secondes
-curl -X POST http://localhost:8474/proxies/dotnet-api-proxy/toxics \
+curl -X POST http://${NODE_IP}:31474/proxies/kafka-proxy/toxics \
   -H "Content-Type: application/json" \
   -d '{
     "name": "timeout_2s",
@@ -860,99 +874,82 @@ curl -X POST http://localhost:8474/proxies/dotnet-api-proxy/toxics \
     }
   }'
 
-# Tester avec timeout
+# Tester avec timeout - le mode idempotent doit gérer les retries
 echo "⏱️ Test avec timeout 2s"
-curl -X POST "http://localhost:18081/api/v1/test/plain" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"timeout-test","key":"timeout-1","message":"Test with timeout"}' \
-  --max-time 5
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=TIMEOUT-TEST-001&sendMode=sync" \
+  --max-time 10
 ```
 
-#### 6.3 Test de Bandwidth Limitation
+#### 6.3 Comparer Plain vs Idempotent sous Pannes
 
 ```bash
-# Limiter la bande passante à 1KB/s
-curl -X POST http://localhost:8474/proxies/dotnet-api-proxy/toxics \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "bandwidth_1kb",
-    "type": "bandwidth",
-    "stream": "downstream",
-    "attributes": {
-      "rate": 1
-    }
-  }'
+# Avec les toxics actifs, comparer les modes
+echo "🧪 Test Mode Plain sous latence (risque de doublons)"
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=plain&eventId=CHAOS-PLAIN-001&sendMode=sync"
 
-# Tester avec bande passante limitée
-echo "📉 Test avec bande passante 1KB/s"
-curl -X POST "http://localhost:18081/api/v1/test/plain" \
-     -H "Content-Type: application/json" \
-     -d '{"topic":"bandwidth-test","key":"bandwidth-1","message":"Test with limited bandwidth"}' \
-  --max-time 30
+echo "🧪 Test Mode Idempotent sous latence (pas de doublons)"
+curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=CHAOS-IDEMPOTENT-001&sendMode=sync"
 ```
 
 #### 6.4 Nettoyage des Toxics
 
 ```bash
-# Supprimer tous les toxics
-curl -X DELETE http://localhost:8474/proxies/dotnet-api-proxy/toxics/latency_5s
-curl -X DELETE http://localhost:8474/proxies/dotnet-api-proxy/toxics/timeout_2s
-curl -X DELETE http://localhost:8474/proxies/dotnet-api-proxy/toxics/bandwidth_1kb
+# Supprimer les toxics
+curl -X DELETE http://${NODE_IP}:31474/proxies/kafka-proxy/toxics/latency_5s
+curl -X DELETE http://${NODE_IP}:31474/proxies/kafka-proxy/toxics/timeout_2s
 
 # Vérifier l'état
-curl http://localhost:8474/proxies/dotnet-api-proxy
+curl http://${NODE_IP}:31474/proxies/kafka-proxy
 ```
 
-## �📊 Validation des Résultats BHF
+## 📊 Validation des Résultats BHF
 
-### Checklist de Validation
+### Checklist de Validation K8s
 
-#### Environnement Local (Docker)
-- [ ] **API Health** : `GET http://localhost:18081/health` retourne 200
-- [ ] **Status Endpoint** : `GET http://localhost:18081/api/v1/status` montre les modes disponibles
-- [ ] **Plain Mode** : Messages envoyés rapidement
-- [ ] **Idempotent Mode** : Messages garantis sans doublons
-- [ ] **Sync Mode** : Réponse immédiate avec offset
-- [ ] **Async Mode** : Haute performance
-- [ ] **Error Handling** : Erreurs gérées proprement
-- [ ] **Docker Build** : Image construite avec succès
-- [ ] **Docker Run** : Conteneur démarre correctement
+Après déploiement, vérifiez :
 
-#### Environnement K8s
-- [ ] **Pod Running** : `kubectl get pods -l app=dotnet-api` montre READY 1/1
-- [ ] **Service Accessible** : `kubectl get svc dotnet-api` accessible
-- [ ] **Health Checks** : Probes fonctionnent
-- [ ] **Kafka Connection** : Connection au cluster Kafka K8s
-- [ ] **Toxiproxy Integration** : Tests de pannes fonctionnels
+```bash
+NODE_IP=$(hostname -I | awk '{print $1}')
+```
+
+#### Pods et Services
+- [ ] **Tous les pods Running** : `kubectl get pods -n kafka | grep m02`
+- [ ] **Services créés** : `kubectl get svc -n kafka | grep m02`
+
+#### Health Checks
+- [ ] **Java API health** : `curl http://${NODE_IP}:31080/health`
+- [ ] **.NET API health** : `curl http://${NODE_IP}:31081/health`
+- [ ] **Toxiproxy version** : `curl http://${NODE_IP}:31474/version`
+
+#### Envoi de Messages
+- [ ] **Mode Idempotent fonctionne** : 
+  ```bash
+  curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=idempotent&eventId=TEST-001&sendMode=sync"
+  ```
+- [ ] **Mode Plain fonctionne** :
+  ```bash
+  curl -X POST "http://${NODE_IP}:31081/api/v1/send?mode=plain&eventId=TEST-002&sendMode=sync"
+  ```
 
 #### Tests de Pannes Toxiproxy
 - [ ] **Latency Test** : 5s latence appliquée et gérée
-- [ ] **Timeout Test** : Timeout 2s géré avec retries
-- [ ] **Bandwidth Test** : Bandwidth limitée gérée
+- [ ] **Idempotence sous pannes** : Pas de doublons malgré les pannes
 - [ ] **Recovery** : Service récupère après suppression des toxics
-- [ ] **Idempotence** : Pas de doublons malgré les pannes
 
-### Scripts de Validation Automatisés
+### Script de Validation Complet
 
 ```bash
-#!/bin/bash
-# validation-complete.sh
+# Utiliser le script fourni
+cd scripts/k8s
+./05-test-apis.sh
+```
 
-echo "🔍 Validation complète de l'atelier BHF"
+### Nettoyage
 
-# Test local Docker
-echo "📦 Tests Docker locaux..."
-bash scripts/test-docker.sh
-
-# Test K8s
-echo "☸️ Tests Kubernetes..."
-bash scripts/test-k8s.sh
-
-# Tests Toxiproxy
-echo "🛡️ Tests Toxiproxy..."
-bash scripts/test-toxiproxy.sh
-
-echo "✅ Validation terminée !"
+```bash
+# Supprimer toutes les ressources du module
+cd scripts/k8s
+./06-cleanup.sh
 ```
 
 ---
