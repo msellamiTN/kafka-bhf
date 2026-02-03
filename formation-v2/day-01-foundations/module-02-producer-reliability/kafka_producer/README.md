@@ -105,8 +105,8 @@ Si vous préférez créer le projet via PowerShell/Terminal :
 # Naviguer vers le répertoire souhaité
 cd "D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\"
 
-# Créer un nouveau projet ASP.NET Core API
-dotnet new webapi -n kafka_producer --minimal
+# Créer un nouveau projet ASP.NET Core API avec .NET 8
+dotnet new webapi -n kafka_producer --framework net8.0 --minimal --no-https false
 
 # Naviguer dans le projet
 cd kafka_producer
@@ -114,11 +114,21 @@ cd kafka_producer
 # Restaurer les dépendances
 dotnet restore
 
+# Ajouter le package Confluent.Kafka
+dotnet add package Confluent.Kafka
+
 # Lancer l'application
 dotnet run
 ```
 
-**Résultat** : L'application démarre sur `https://localhost:5001`
+**Options CLI expliquées** :
+- `-n kafka_producer` : Nom du projet
+- `--framework net8.0` : Cible .NET 8.0
+- `--minimal` : Utilise les APIs minimales (pas de contrôleurs)
+- `--no-https false` : Active HTTPS (équivalent à cocher "Configure for HTTPS")
+- `--use-controllers false` : Désactive les contrôleurs (APIs minimales)
+
+**Résultat** : L'application démarre sur `https://localhost:5001` ou `http://localhost:5000`
 
 ---
 
