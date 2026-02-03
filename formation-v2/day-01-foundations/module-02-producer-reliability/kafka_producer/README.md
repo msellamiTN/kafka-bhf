@@ -1,456 +1,365 @@
-# Guide de Configuration - Producteur Kafka (.NET 8)
+# ?? Guide Complet - Producteur Kafka ASP.NET Core (.NET 8)
 
-Ce guide vous présentera étape par étape comment configurer et exécuter ce projet producteur Kafka basé sur .NET 8 avec Confluent.Kafka.
+## ?? Bienvenue !
 
-## 📋 Table des Matières
+Ce guide complet vous aidera � **configurer, d�velopper et d�ployer** un producteur Kafka haute performance en utilisant **ASP.NET Core 8** et la biblioth�que **Confluent.Kafka**. 
 
-1. [Prérequis](#-prérequis)
-2. [Créer un Nouveau Projet](#-créer-un-nouveau-projet-aspnet-core-api)
-3. [Configuration Kafka](#-configuration-kafka)
-4. [Étapes de Configuration](#-étapes-de-configuration)
-5. [Utilisation de Docker](#-utilisation-de-docker)
-6. [Structure du Projet](#-structure-du-projet)
-7. [Fichier de Projet](#-fichier-de-projet-kafka_producercsproj)
-8. [Résolution des Erreurs](#-résolution-des-erreurs-courantes)
-9. [Commandes Utiles](#-commandes-utiles)
-10. [Secrets Utilisateur](#-secrets-utilisateur)
-11. [Ressources](#-ressources-utiles)
-12. [Checklist](#-checklist-de-vérification)
-13. [Conseils](#-conseils-de-développement)
+**Pour qui ?** D�veloppeurs d�butants � interm�diaires souhaitant int�grer Kafka dans leur architecture microservices.
 
-## 📋 Prérequis
-
-Avant de commencer, assurez-vous d'avoir installé les éléments suivants sur votre machine :
-
-- **.NET 8 SDK** : [Télécharger .NET 8](https://dotnet.microsoft.com/download/dotnet/8.0)
-- **Visual Studio 2022** (optionnel mais recommandé) ou **Visual Studio Code**
-- **Docker Desktop** (optionnel, pour la conteneurisation)
-- **Git** : Pour cloner le référentiel
-- **Kafka Cluster** : Local ou distant pour tester le producer
-
-### Vérifier les versions installées
-
-Ouvrez une invite de commande ou PowerShell et exécutez :
-
-```powershell
-dotnet --version
-docker --version
-git --version
-```
-
-## 🚀 Créer un Nouveau Projet ASP.NET Core API
-
-### Méthode 1 : Utiliser Visual Studio 2022 (Interface Graphique)
-
-#### Étape 1 : Lancer Visual Studio 2022
-
-![Lancer Visual Studio 2022](assets/01-visual-studio-launch.png)
-
-Ouvrez Visual Studio 2022 depuis le menu Démarrer ou le raccourci bureau.
-
-#### Étape 2 : Créer un Nouveau Projet
-
-![Créer un nouveau projet](assets/02-create-new-project.png)
-
-- Cliquez sur **"Create a new project"** ou allez à **File → New → Project**
-
-#### Étape 3 : Sélectionner le Modèle API
-
-![Sélectionner le modèle ASP.NET Core Web API](assets/03-select-api-template.png)
-
-- Recherchez **"ASP.NET Core Web API"**
-- Sélectionnez le modèle
-- Cliquez sur **"Next"**
-
-#### Étape 4 : Configurer le Projet
-
-![Configurer le projet](assets/04-configure-project.png)
-
-Remplissez les informations suivantes :
-
-- **Project name** : `kafka_producer`
-- **Location** : Choisissez le chemin `D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\`
-- **Solution name** : `kafka_producer`
-- Cochez **"Place solution and project in the same directory"** (optionnel)
-- Cliquez sur **"Next"**
-
-#### Étape 5 : Informations Supplémentaires
-
-![Sélectionner .NET 8 et options](assets/05-infos-dotnet-container.png)
-
-Configurez les options suivantes :
-
-- **Framework** : Sélectionnez **".NET 8.0"**
-- **Authentication type** : Laissez à **"None"**
-- **Configure for HTTPS** : Cochez cette option
-- **Use controllers (uncheck to use minimal APIs)** : Décochez pour utiliser les APIs minimales
-- **Enable OpenAPI support** : Cochez pour Swagger/OpenAPI
-- Cliquez sur **"Create"**
-
-#### Étape 6 : Projet Créé
-
-![Projet créé avec succès](assets/06-project-created.png)
-
-Votre nouveau projet ASP.NET Core API est maintenant créé avec :
-- ✅ Structure de base avec `Program.cs`, `Controllers/`, etc.
-- ✅ Le fichier `.csproj` configuré
-- ✅ Le dossier `Properties/` avec configurations de lancement
-- ✅ Swagger/OpenAPI activé pour la documentation API
-
-### Méthode 2 : Utiliser la Ligne de Commande (CLI)
-
-Si vous préférez créer le projet via PowerShell/Terminal :
-
-```powershell
-# Naviguer vers le répertoire souhaité
-cd "D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\"
-
-# Créer un nouveau projet ASP.NET Core API
-dotnet new webapi -n kafka_producer
-
-# Naviguer dans le projet
-cd kafka_producer
-
-# Mettre à jour le fichier .csproj pour .NET 8
-# Ouvrez kafka_producer.csproj et changez <TargetFramework>net10.0</TargetFramework> en <TargetFramework>net8.0</TargetFramework>
-
-# Restaurer les dépendances
-dotnet restore
-
-# Ajouter le package Confluent.Kafka
-dotnet add package Confluent.Kafka
-
-# Lancer l'application
-dotnet run
-```
-
-**Options CLI expliquées** :
-- `-n kafka_producer` : Nom du projet
-- Le template par défaut crée un projet .NET 10.0 (doit être modifié manuellement pour .NET 8)
-- Les contrôleurs sont utilisés par défaut (peut être modifié pour APIs minimales)
-- HTTPS est activé par défaut
-- OpenAPI (Swagger) est activé par défaut
-
-**Modification manuelle requise** :
-Après la création, ouvrez `kafka_producer.csproj` et modifiez :
-```xml
-<!-- Avant -->
-<TargetFramework>net10.0</TargetFramework>
-
-<!-- Après -->
-<TargetFramework>net8.0</TargetFramework>
-```
-
-**Résultat** : L'application démarre sur `https://localhost:5001` ou `http://localhost:5000`
+**Dur�e estim�e :** 30-45 minutes  
+**Niveau de difficult� :** ?? Interm�diaire
 
 ---
 
-## ⚙️ Configuration Kafka
+## ?? Table des Mati�res
 
-### Étape 1 : Ajouter Confluent.Kafka
+| # | Section | ?? Temps |
+|---|---------|---------|
+| 1 | [Pr�requis](#pr�requis) | 5 min |
+| 2 | [Cr�er un Nouveau Projet](#cr�er-un-nouveau-projet-aspnet-core-api) | 10 min |
+| 3 | [Configuration Kafka](#configuration-kafka) | 15 min |
+| 4 | [�tapes Rapides](#�tapes-rapides) | 5 min |
+| 5 | [Utilisation Docker](#utilisation-docker) | 10 min |
+| 6 | [Structure du Projet](#structure-du-projet) | 5 min |
+| 7 | [Troubleshooting](#troubleshooting) | Besoin |
+| 8 | [Ressources](#ressources) | Ref. |
+
+---
+
+## ?? Pr�requis
+
+### ??? Requis Absolus
+
+- **? .NET 8 SDK** ? : [T�l�charger](https://dotnet.microsoft.com/download/dotnet/8.0)
+  - V�rifiez : `dotnet --version` (doit �tre ? 8.0)
+  
+- **Git** : Pour versionner et cloner
+  - V�rifiez : `git --version`
+
+- **Un �diteur de code** :
+  - **Visual Studio 2022** (recommand�) : [T�l�charger](https://visualstudio.microsoft.com/)
+  - **Visual Studio Code** : [T�l�charger](https://code.visualstudio.com/)
+
+### ?? Optionnel mais Recommand�
+
+- **Docker Desktop** : Pour conteneuriser
+  - V�rifiez : `docker --version`
+  - [T�l�charger](https://www.docker.com/products/docker-desktop)
+
+---
+
+## ?? Cr�er un Nouveau Projet ASP.NET Core API
+
+### ?? M�thode 1 : Interface Graphique (Visual Studio 2022)
+
+1. **Lancer Visual Studio 2022**
+2. **Cliquer** : "Create a new project" ou **File ? New ? Project**
+3. **Rechercher** : `api` ? S�lectionner **"ASP.NET Core Web API"** ? **Next**
+4. **Configurer** :
+   - Project name: `kafka_producer`
+   - Location: `D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\`
+   - ? **Next**
+5. **S�lectionner .NET** : `.NET 8.0` ? **Create**
+
+? **Fait !** Le projet est cr��.
+
+### ?? M�thode 2 : Ligne de Commande
 
 ```powershell
-# Ajouter le package Confluent.Kafka
-dotnet add package Confluent.Kafka
+# Cr�er le projet
+dotnet new webapi -n kafka_producer -minimal false
 
-# Vérifier l'installation
-dotnet list package
+# Naviguer dedans
+cd kafka_producer
+
+# Modifier .csproj : Remplacer net10.0 par net8.0
+# Puis build
+dotnet build
 ```
 
-### Étape 2 : Configurer le Producer
+---
 
-Créez un fichier `KafkaProducerService.cs` :
+## ?? Configuration Kafka
+
+### 1?? Ajouter le Package
+
+```powershell
+dotnet add package Confluent.Kafka
+```
+
+### 2?? Cr�er le Service `Services/KafkaProducerService.cs`
 
 ```csharp
 using Confluent.Kafka;
 
-public class KafkaProducerService
+namespace kafka_producer.Services
 {
-    private readonly IProducer<string, string> _producer;
-    
-    public KafkaProducerService()
+    public interface IKafkaProducerService
     {
-        var config = new ProducerConfig
-        {
-            BootstrapServers = "localhost:9092",
-            Acks = Acks.All,
-            EnableIdempotence = true,
-            MessageSendMaxRetries = 3
-        };
-        
-        _producer = new ProducerBuilder<string, string>(config).Build();
+        Task<DeliveryResult<string, string>> SendMessageAsync(
+            string topic, string key, string value);
     }
-    
-    public async Task<DeliveryResult<string, string>> SendMessageAsync(string topic, string key, string value)
+
+    public class KafkaProducerService : IKafkaProducerService, IAsyncDisposable
     {
-        var message = new Message<string, string>
+        private readonly IProducer<string, string> _producer;
+        private readonly ILogger<KafkaProducerService> _logger;
+
+        public KafkaProducerService(IConfiguration config, ILogger<KafkaProducerService> logger)
         {
-            Key = key,
-            Value = value
-        };
-        
-        return await _producer.ProduceAsync(topic, message);
+            _logger = logger;
+            var bootstrapServers = config["Kafka:BootstrapServers"] ?? "localhost:9092";
+            
+            var producerConfig = new ProducerConfig
+            {
+                BootstrapServers = bootstrapServers,
+                ClientId = "kafka_producer_app",
+                Acks = Acks.All,
+                Retries = 3,
+                EnableIdempotence = true,
+                CompressionType = CompressionType.Snappy
+            };
+
+            _producer = new ProducerBuilder<string, string>(producerConfig)
+                .SetErrorHandler((_, error) => _logger.LogError($"Erreur: {error.Reason}"))
+                .Build();
+
+            _logger.LogInformation($"Producer initialis� sur {bootstrapServers}");
+        }
+
+        public async Task<DeliveryResult<string, string>> SendMessageAsync(
+            string topic, string key, string value)
+        {
+            var message = new Message<string, string> { Key = key, Value = value };
+            return await _producer.ProduceAsync(topic, message);
+        }
+
+        async ValueTask IAsyncDisposable.DisposeAsync()
+        {
+            _producer?.Dispose();
+            await Task.CompletedTask;
+        }
     }
 }
 ```
 
-### Étape 3 : Mettre à jour Program.cs
+### 3?? Mettre � Jour `Program.cs`
 
 ```csharp
+using kafka_producer.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddControllers();
+builder.Services.AddOpenApi();
+builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
 
 var app = builder.Build();
 
-// Configure Kafka endpoint
-app.MapPost("/api/kafka/send", async (KafkaProducerService producer, string topic, string key, string value) =>
+if (app.Environment.IsDevelopment())
 {
-    try
-    {
-        var result = await producer.SendMessageAsync(topic, key, value);
-        return Results.Ok(new { Status = "Success", Offset = result.Offset });
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(detail: ex.Message, statusCode: 500);
-    }
-});
+    app.MapOpenApi();
+}
 
+app.UseHttpsRedirection();
+app.MapControllers();
 app.Run();
 ```
 
+### 4?? Cr�er l'API `Controllers/KafkaController.cs`
+
+```csharp
+using kafka_producer.Services;
+using Microsoft.AspNetCore.Mvc;
+
+namespace kafka_producer.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class KafkaController : ControllerBase
+    {
+        private readonly IKafkaProducerService _producer;
+        private readonly ILogger<KafkaController> _logger;
+
+        public KafkaController(IKafkaProducerService producer, ILogger<KafkaController> logger)
+        {
+            _producer = producer;
+            _logger = logger;
+        }
+
+        [HttpPost("send")]
+        public async Task<IActionResult> SendMessage([FromBody] SendMessageRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Topic) || string.IsNullOrWhiteSpace(request.Value))
+                return BadRequest("Topic et Value sont requis");
+
+            try
+            {
+                var result = await _producer.SendMessageAsync(
+                    request.Topic, request.Key ?? "default", request.Value);
+
+                return Ok(new
+                {
+                    status = "Success",
+                    topic = result.Topic,
+                    partition = result.Partition.Value,
+                    offset = result.Offset.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erreur: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("health")]
+        public IActionResult Health() => Ok(new { status = "healthy" });
+    }
+
+    public class SendMessageRequest
+    {
+        public string Topic { get; set; } = string.Empty;
+        public string? Key { get; set; }
+        public string Value { get; set; } = string.Empty;
+    }
+}
+```
+
+### 5?? Configurer `appsettings.json`
+
+```json
+{
+  "Kafka": {
+    "BootstrapServers": "localhost:9092"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
+}
+```
+
 ---
 
-## 🔧 Étapes de Configuration
-
-### Étape 1 : Cloner le Référentiel
+## ? �tapes Rapides
 
 ```powershell
-git clone https://github.com/msellamiTN/kafka-bhf
-cd kafka-bhf
-```
-
-### Étape 2 : Vérifier la Configuration NuGet
-
-Le fichier `nuget.config` à la racine du projet configure les sources des packages NuGet. Il devrait contenir :
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <packageSources>
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
-  </packageSources>
-</configuration>
-```
-
-**Important** : Ce fichier est nécessaire pour télécharger les packages depuis `nuget.org`. S'il est absent ou vide, vous recevrez l'erreur `NU1100` ou `NU1101`.
-
-### Étape 3 : Restaurer les Dépendances
-
-Cette commande télécharge tous les packages NuGet nécessaires :
-
-```powershell
+# 1. Restaurer
 dotnet restore
-```
 
-**Résultat attendu** : Les packages doivent se télécharger sans erreur.
-
-### Étape 4 : Construire le Projet
-
-```powershell
+# 2. Construire
 dotnet build
-```
 
-**Résultat attendu** : Message "Génération réussie" (Build succeeded)
-
-### Étape 5 : Exécuter le Projet
-
-```powershell
+# 3. Ex�cuter
 dotnet run
+
+# 4. Tester - Ouvrir navigateur
+# https://localhost:5001/swagger
 ```
 
-L'application web devrait démarrer et être accessible à l'URL affichée dans la console (généralement `https://localhost:5001` ou `http://localhost:5000`).
+---
 
-## 🐳 Utilisation de Docker
+## ?? Utilisation Docker
 
-Si vous souhaitez exécuter le projet dans un conteneur Docker :
+### Cr�er `docker-compose.yml`
 
-### Étape 1 : Construire l'Image Docker
+```yaml
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+    depends_on:
+      - zookeeper
+
+  producer:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      Kafka__BootstrapServers: kafka:29092
+    depends_on:
+      - kafka
+```
+
+### Lancer
 
 ```powershell
-docker build -t kafka-producer:latest .
+docker-compose up -d
 ```
 
-### Étape 2 : Exécuter le Conteneur
+---
+
+## ?? Structure du Projet
+
+```
+kafka-producer/
+??? Program.cs
+??? Dockerfile
+??? docker-compose.yml
+??? appsettings.json
+??? nuget.config
+??? Controllers/
+?   ??? KafkaController.cs
+??? Services/
+?   ??? KafkaProducerService.cs
+??? Properties/
+?   ??? launchSettings.json
+??? README.md
+```
+
+---
+
+## ?? Troubleshooting
+
+### ? Erreur : "Port 5000 d�j� utilis�"
 
 ```powershell
-docker run -p 5000:80 --name kafka-producer kafka-producer:latest
-```
-
-L'application sera accessible à `http://localhost:5000`
-
-### Étape 3 : Arrêter le Conteneur
-
-```powershell
-docker stop kafka-producer
-docker rm kafka-producer
-```
-
-## 📁 Structure du Projet
-
-```
-kafka-bhf/
-??? kafka_producer.csproj      # Fichier de configuration du projet
-??? nuget.config               # Configuration des sources NuGet
-??? [autres fichiers source]
-
-## 📄 Fichier de Projet (kafka_producer.csproj)
-
-Le fichier `.csproj` contient la configuration de votre projet :
-
-- **TargetFramework** : `net8.0` (.NET 8)
-- **Nullable** : `enable` (gestion stricte des valeurs nullables)
-- **Dépendances** :
-  - `Microsoft.AspNetCore.OpenApi` v8.0.0
-  - `Confluent.Kafka` v2.3.0
-  - `Microsoft.VisualStudio.Azure.Containers.Tools.Targets` v1.21.0
-
-## 🛠️ Résolution des Erreurs Courantes
-
-### Erreur : "NU1100 - Impossible de résoudre le package"
-
-**Cause** : Le fichier `nuget.config` est manquant ou mal configuré.
-
-**Solution** :
-1. Vérifiez que `nuget.config` existe à la racine du projet
-2. Assurez-vous qu'il contient la source `https://api.nuget.org/v3/index.json`
-3. Exécutez : `dotnet restore`
-
-### Erreur : ".NET 8 SDK non trouvé"
-
-**Cause** : .NET 8 n'est pas installé.
-
-**Solution** :
-1. Téléchargez et installez [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-2. Redémarrez votre IDE et votre terminal
-3. Vérifiez : `dotnet --version`
-
-### Erreur : "Port déjà en utilisation"
-
-**Cause** : Un autre processus utilise le port 5000 ou 5001.
-
-**Solution** :
-```powershell
-# Trouver le processus utilisant le port 5000
 netstat -ano | findstr :5000
-
-# Arrêter le processus (remplacez PID par le numéro trouvé)
 taskkill /PID <PID> /F
 ```
 
-## ⚡ Commandes Utiles
+### ? Erreur : "Kafka connection refused"
+
+- Assurez-vous que Kafka s'ex�cute : `docker-compose up -d`
+- V�rifiez `appsettings.json` : `Kafka:BootstrapServers` correct
+
+### ? Erreur : ".NET 8 SDK not found"
 
 ```powershell
-# Restaurer les dépendances
-dotnet restore
-
-# Construire le projet
-dotnet build
-
-# Exécuter le projet en mode debug
-dotnet run
-
-# Exécuter avec une configuration spécifique
-dotnet run --configuration Release
-
-# Nettoyer les fichiers de build
-dotnet clean
-
-# Vérifier les références de packages
-dotnet list package
-
-# Mettre à jour les packages
-dotnet package update
-```
-
-## 🔐 Secrets Utilisateur
-
-Le projet utilise un ID de secrets utilisateur : `a2b73e20-d132-44d8-ba05-986a35f975a2`
-
-Pour configurer les secrets en développement :
-
-```powershell
-dotnet user-secrets init
-dotnet user-secrets set "YourSecretKey" "YourSecretValue"
-```
-
-## 📚 Ressources Utiles
-
-- [Documentation .NET 8](https://learn.microsoft.com/en-us/dotnet/fundamentals/)
-- [Apache Kafka Documentation](https://kafka.apache.org/documentation/)
-- [Docker Documentation](https://docs.docker.com/)
-- [NuGet.org](https://www.nuget.org/)
-
-## ✅ Checklist de Vérification
-
-Avant de déployer votre application, assurez-vous que :
-
-- [ ] .NET 8 SDK est installé
-- [ ] `nuget.config` est présent à la racine du projet
-- [ ] `dotnet restore` s'exécute sans erreur
-- [ ] `dotnet build` réussit
-- [ ] `dotnet run` démarre l'application
-- [ ] L'application est accessible sur le navigateur
-- [ ] Docker fonctionne correctement (si utilisé)
-- [ ] Les images sont visibles dans le dossier `assets/`
-
-## 💡 Conseils de Développement
-
-1. **Utilisez Visual Studio 2022** pour une meilleure expérience de développement
-2. **Activez les secrets utilisateur** pour gérer les données sensibles
-3. **Testez localement avant le déploiement** en Docker
-4. **Maintenez vos packages à jour** régulièrement
-5. **Documentez votre code** avec des commentaires significatifs
-6. **Utilisez Git** pour versionner votre code
-
-## 📞 Support
-
-Pour toute question ou problème, consultez :
-- Les issues sur [GitHub](https://github.com/msellamiTN/kafka-bhf/issues)
-- La documentation officielle [.NET 10](https://learn.microsoft.com/en-us/dotnet/)
-- [Visual Studio 2022 Documentation](https://learn.microsoft.com/en-us/visualstudio/)
-- Les forums de la communauté .NET sur Stack Overflow
-
-## 📂 Structure des Fichiers
-
-```
-kafka-bhf/
-??? README.md                        # Ce guide
-??? nuget.config                     # Configuration NuGet
-??? Dockerfile                       # Configuration Docker
-??? assets/                          # Dossier pour les images
-?   ??? IMAGES_GUIDE.md             # Guide des images
-?   ??? README_IMAGES.md            # Instructions d'ajout d'images
-?   ??? visual_studio_create_project_api_00.png  # Écran d'accueil VS
-?   ??? visual_studio_create_project_api_01.png  # Créer nouveau projet
-?   ??? visual_studio_create_project_api_03.png  # Sélectionner modèle
-?   ??? visual_studio_create_project_api_04.png  # Configurer projet
-??? formation-v2/
-?   ??? day-01-foundations/
-?       ??? module-02-producer-reliability/
-?           ??? kafka_producer/       # Votre projet
-?               ??? kafka_producer.csproj
-?               ??? Program.cs
-?               ??? Properties/
-?               ??? Controllers/
-?               ??? ...
-??? [autres répertoires]
+dotnet --version
+# T�l�chargez .NET 8 si absent
 ```
 
 ---
 
-**Dernière mise à jour** : 2025
-**Version .NET cible** : .NET 8
-**Statut** : ✅ Guide complet avec images et configuration Kafka
+## ?? Ressources
+
+- ?? [Confluent.Kafka Docs](https://docs.confluent.io/kafka-clients/dotnet/current/overview.html)
+- ?? [ASP.NET Core Docs](https://learn.microsoft.com/en-us/aspnet/core/)
+- ?? [Kafka Docs](https://kafka.apache.org/documentation/)
+
+---
+
+**Version** : 1.0  
+**Date** : 2024  
+**Auteur** : Data2AI Academy  
+
+? **Pr�t � d�marrer !**
+
