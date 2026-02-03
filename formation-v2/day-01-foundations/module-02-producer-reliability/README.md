@@ -1,20 +1,63 @@
 # Module 02 - Fiabilité du Producteur Kafka (Idempotence) - Formation Auto-rythmée
 
-## Durée estimée
+## 🎯 Objectifs Pédagogiques Complets
 
-⏱️ **60-90 minutes**
+Ce module vous offre une **formation académique complète** allant de la théorie fondamentale à la pratique avancée, en passant par le développement pas à pas et le déploiement production.
 
-## Objectifs pédagogiques
+### 📚 Parcours d'Apprentissage Structuré
+
+```mermaid
+flowchart TB
+    subgraph THEORY["📚 Phase 1: Fondements Théoriques"]
+        T1["📖 Concepts Kafka de Base"]
+        T2["🧮 Architecture Producer"]
+        T3["🔐 Idempotence & Fiabilité"]
+        T4["📊 ACK Levels"]
+        T5["⚡ Performance"]
+    end
+    
+    subgraph DEVELOP["💻 Phase 2: Développement .NET"]
+        D1["📝 Tutoriel Complet"]
+        D2["Code Incrémental"]
+        D3["Patterns Avancés"]
+        D4["Tests Unitaires"]
+        D5["Debugging"]
+    end
+    
+    subgraph PRACTICE["🧪 Phase 3: Pratique & Tests"]
+        P1["Tests Locaux"]
+        P2["Validation Kafka"]
+        P3["Tests de Charge"]
+        P4["Injection Pannes"]
+        P5["Monitoring"]
+    end
+    
+    subgraph DEPLOY["🚀 Phase 4: Déploiement"]
+        D1["🐳 Docker"]
+        D2["☸️ Kubernetes"]
+        D3["CI/CD"]
+        D4["Production"]
+        D5["Monitoring"]
+    end
+    
+    THEORY --> DEVELOP --> PRACTICE --> DEPLOY
+    
+    style THEORY fill:#e3f2fd
+    style DEVELOP fill:#f3e5f5
+    style PRACTICE fill:#e8f5e8
+    style DEPLOY fill:#fff3e0
+```
+
+### 🎯 Objectifs Spécifiques
 
 À la fin de ce module, vous serez capable de :
 
-1. ✅ Comprendre la différence entre un producer **idempotent** et **non-idempotent**
-2. ✅ Maîtriser l'envoi **synchrone** vs **asynchrone** et les callbacks
-3. ✅ Configurer les **retries** et **timeouts** pour la fiabilité
-4. ✅ Comprendre l'impact des **clés** sur le partitionnement
-5. ✅ Utiliser **Toxiproxy** pour simuler des pannes réseau
-6. ✅ Observer et déboguer les messages via **Kafka UI**
-7. ✅ Comprendre la **log compaction** et son utilité
+1. ✅ **Maîtriser les concepts théoriques** du Producer Kafka
+2. ✅ **Développer** un Producer .NET fiable avec idempotence
+3. ✅ **Comprendre** les patterns de fiabilité distribuée
+4. ✅ **Tester** et déboguer les messages Kafka
+5. **Déployer** en production avec Docker et Kubernetes
+6. **Monitorer** et optimiser les performances
 
 ---
 
@@ -22,7 +65,7 @@
 
 ### 1. Le Producteur Kafka en détail
 
-#### Cycle de vie d'un message
+#### 1.1 Cycle de vie d'un message
 
 ```mermaid
 sequenceDiagram
@@ -50,7 +93,7 @@ sequenceDiagram
     Prod-->>App: Future/Callback
 ```
 
-#### Composants internes du Producer
+#### 1.2 Composants internes du Producer
 
 ```mermaid
 flowchart TB
@@ -76,11 +119,20 @@ flowchart TB
     K -->|"ACK"| SND
 ```
 
+#### 1.3 Points Clés de Performance
+
+| Composant | Impact | Configuration | Tips |
+|-----------|---------|-------------|------|
+| **Batch Size** | Throughput | `batch.size=16KB` | Augmenter pour haute charge |
+| **Linger** | Latence | `linger.ms=5-10` | Compromis latence/débit |
+| **Compression** | Réseau | `compression.type=snappy` | Réduit bande passante |
+| **Buffer Pool** | Mémoire | `buffer.memory=32MB` | Évite allocations |
+
 ---
 
 ### 2. Les Acknowledgments (ACKs)
 
-#### Niveaux d'ACK
+#### 2.1 Niveaux d'ACK et Sémantique
 
 ```mermaid
 flowchart TB
@@ -106,7 +158,180 @@ flowchart TB
     
     style acks0 fill:#ffebee
     style acks1 fill:#fff3e0
-    style acksAll fill:#e8f5e9
+    style acksAll fill:#e8f5e8
+```
+
+#### 2.2 Trade-offs Performance vs Fiabilité
+
+| ACK Level | Latence | Fiabilité | Cas d'usage | Risques |
+|-----------|----------|-----------|-------------|--------|
+| **acks=0** | ⚡ Minimal | ❌ Aucune | Logs, métriques | Perte de données |
+| **acks=1** | ⚡ Faible | ⚠️ Moyenne | Données non critiques | Perte en cas de crash leader |
+| **acks=all** | 🐥 Élevée | ✅ Maximale | Transactions critiques | Performance réduite |
+
+#### 2.3 Impact sur le Producteur
+
+```yaml
+# Configuration selon niveau de fiabilité souhaité
+producer:
+  enable.idempotence: true  # Requis pour exactly-once
+  acks: all              # Requis pour exactly-once
+  max.in.flight.requests: 5  # Requis pour idempotence
+  retries: INT_MAX
+  delivery.timeout.ms: 120000
+  request.timeout.ms: 30000
+```
+
+---
+
+### 3. Idempotence : Garantie d'Exact-Once
+
+#### 3.1 Principe Mathématique
+
+```
+f(f(x)) = f(x)
+```
+
+#### 3.2 Implémentation dans Kafka
+
+```mermaid
+sequenceDiagram
+    participant P as Producer
+    participant K as Kafka Broker
+    participant R as Replica
+    
+    Note over P: Envoi Message (PID:123, Seq:1)
+    P->>K: Envoi Message (PID:123, Seq:1)
+    K->>R: Replication
+    R-->>K: ACK
+    
+    Note over P: Timeout ! Réessai
+    P->>K: Envoi Message (PID:123, Seq:1)
+    K->>K: Détection duplicata
+    K-->>P: ACK (sans duplication)
+```
+
+#### 3.3 Mécanismes Techniques
+
+| Mécanisme | Rôle | Configuration .NET |
+|-----------|------|----------------------|
+| **Producer ID (PID)** | Identifiant unique du producer | `EnableIdempotence = true` |
+| **Sequence Number** | Ordre des messages par partition | Géré automatiquement |
+| **Deduplication Buffer** | Cache des messages envoyés | Côté broker |
+| **Max In Flight** | Limite requêtes simultanées | `max.in.flight.requests = 5` |
+
+#### 3.4 Configuration .NET pour Idempotence
+
+```csharp
+var config = new ProducerConfig
+{
+    // 🔑 Activation de l'idempotence
+    EnableIdempotence = true,
+    
+    // 📡 Confirmation maximale
+    Acks = Acks.All,
+    
+    // 🚦 Contrôle du pipeline
+    MaxInFlight = 5,
+    
+    // ⏱️ Timeouts et retries
+    RequestTimeoutMs = 1000,
+    MessageTimeoutMs = 120000,
+    MessageSendMaxRetries = 10,
+    RetryBackoffMs = 100
+};
+```
+
+---
+
+### 4. Patterns de Fiabilité Distribuée
+
+#### 4.1 Retry Pattern
+
+```mermaid
+stateDiagram-v2
+    [*] --> Send
+    Send --> Success: ACK reçu
+    Send --> Retry: Timeout/Network Error
+    Retry --> Send: Backoff exponentiel
+    Retry --> Failed: Max retries atteint
+    Success --> [*]
+    Failed --> [*]
+    
+    note right of Retry
+        RetryBackoffMs = 100ms
+        MessageSendMaxRetries = 10
+        Exponential backoff optionnel
+    end note
+```
+
+#### 4.2 Circuit Breaker Pattern
+
+```csharp
+public class CircuitBreakerProducer
+{
+    private int _failureCount = 0;
+    private DateTime _lastFailure = DateTime.MinValue;
+    private readonly int _threshold = 5;
+    private readonly TimeSpan _timeout = TimeSpan.FromMinutes(1);
+    
+    public async Task<DeliveryResult<string, string>> SendAsync(
+        IProducer<string, string> producer, 
+        Message<string, string> message)
+    {
+        if (IsCircuitOpen())
+            throw new InvalidOperationException("Circuit breaker is open");
+            
+        try
+        {
+            var result = await producer.ProduceAsync(message);
+            ResetCircuit();
+            return result;
+        }
+        catch (Exception ex)
+        {
+            RecordFailure();
+            throw;
+        }
+    }
+}
+```
+
+---
+
+### 5. Performance et Optimisation
+
+#### 5.1 Mesures Clés
+
+| Métrique | Objectif | Cible | Optimisation |
+|----------|---------|------|---------------|
+| **Throughput** | Messages/seconde | `producer.send()` | `batch.size`, `linger.ms` |
+| **Latence** | Temps de réponse | `delivery.timeout.ms` | `request.timeout.ms` |
+| **Perte** | Messages perdus | `acks` level | `retries` configuration |
+| **Mémoire** | Utilisation heap | `buffer.memory` | `buffer.pool.max.size` |
+
+#### 5.2 Optimisations Avancées
+
+```csharp
+// Optimisation haute performance
+var config = new ProducerConfig
+{
+    // 🚀 Batch size pour haute charge
+    BatchSize = 32768,
+    
+    // ⚡ Linger pour batching
+    LingerMs = 5,
+    
+    // 🗜️ Compression
+    CompressionType = CompressionType.Snappy,
+    
+    // 📊 Buffer pool
+    BufferMemory = 67108864, // 64MB
+    
+    // 🔧 Socket buffer
+    SocketSendBufferSizeBytes = 102400,
+    ReceiveBufferSizeBytes = 102400
+};
 ```
 
 #### Comparaison des modes ACK
@@ -551,11 +776,42 @@ kubectl get pods -n kafka -l strimzi.io/cluster=bhf-kafka
 
 ## 🛠️ Phase de Développement .NET avec Kafka
 
-### Objectif
+### 🎯 Objectif
 
 Ce module est conçu pour les **développeurs .NET BHF** souhaitant maîtriser l'intégration Kafka dans leurs applications. Vous apprendrez à développer un Producer Kafka fiable, puis à le déployer et tester dans des environnements Docker et Kubernetes.
 
 > **Note** : Cette phase est **recommandée** pour comprendre en profondeur l'intégration Kafka. Si vous voulez simplement déployer et tester, passez directement au [Lab 02.0](#-lab-020---démarrage-du-module).
+
+### 📚 Parcours d'Apprentissage Intégré
+
+**Étape 1 → Étape 2 → Étape 3 → Étape 4 → Étape 5**
+
+```mermaid
+flowchart TB
+    subgraph DEV["💻 Développement .NET"]
+        D1["📖 Théorie"]
+        D2["📝 Tutoriel"]
+        D3["💻 Code"]
+        D4["🧪 Tests"]
+    end
+    subgraph BUILD["🐳 Build"]
+        B1["Dockerfile"]
+        B2["Image"]
+        B3["Scan Sécurité"]
+    end
+    
+    subgraph DEPLOY["🚀 Déploiement"]
+        K1["Kubernetes"]
+        K2["Services"]
+        K3["Monitoring"]
+    end
+    
+    DEV --> BUILD --> DEPLOY
+    
+    style DEV fill:#e3f2fd
+    style BUILD fill:#f3e5f5
+    style DEPLOY fill:#e8f5e8
+```
 
 ---
 
