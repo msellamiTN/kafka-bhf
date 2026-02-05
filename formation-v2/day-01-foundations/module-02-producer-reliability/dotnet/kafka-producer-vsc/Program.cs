@@ -1,7 +1,12 @@
-using Confluent.Kafka;
-using System.Collections.Concurrent;
+using M02ProducerReliability.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllers();
+
+// Register Kafka Producer Service
+builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
 
 var app = builder.Build();
 
@@ -46,6 +51,7 @@ var idempotentProducer = new Lazy<IProducer<string, string>>(() => BuildProducer
 
 var statusByRequestId = new ConcurrentDictionary<string, object>();
 
+// Health endpoint
 app.MapGet("/health", () => Results.Ok("OK"));
 
 app.Lifetime.ApplicationStopping.Register(() =>

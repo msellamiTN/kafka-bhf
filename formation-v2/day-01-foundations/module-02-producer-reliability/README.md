@@ -67,28 +67,37 @@ Ce module propose **deux approches de développement** pour s'adapter à votre e
 
 ### 📁 **Option 1 : Visual Studio Code** (`dotnet/kafka-producer-vsc/`)
 
-**Approche minimaliste et légère** - Idéale pour le développement rapide et les environnements conteneurisés.
+**Approche structurée et légère** - Idéale pour le développement rapide et les environnements conteneurisés.
 
 #### 🎯 Caractéristiques
-- **Architecture** : Minimal API (Program.cs unique)
-- **Style** : Code concis et fonctionnel
-- **Dépendances** : Minimum requis
-- **Taille** : ~12 fichiers (léger)
+- **Architecture** : Controllers + Services (structure officielle .NET)
+- **Style** : Code structuré et optimisé
+- **Dépendances** : Minimum requis et cohérentes
+- **Taille** : ~15 fichiers (léger)
 - **IDE** : Visual Studio Code optimal
 
 #### 📂 Structure
 ```
 dotnet/kafka-producer-vsc/
-├── Program.cs                    # API complète en un fichier
-├── Dockerfile                    # Build Docker optimisé
+├── Controllers/
+│   └── KafkaController.cs         # API endpoints
+├── Services/
+│   └── KafkaProducerService.cs    # Business logic
+├── Properties/
+│   └── launchSettings.json        # Configuration IDE
+├── Program.cs                      # Configuration ASP.NET Core
+├── Dockerfile                      # Build Docker optimisé
 ├── M02ProducerReliability.Api.csproj
-├── bin/ & obj/                   # Build outputs
+├── appsettings.json                # Configuration app
+├── appsettings.Development.json    # Configuration dev
+├── bin/ & obj/                     # Build outputs
 ```
 
 #### 🚀 Avantages
+- ✅ **Structure officielle** - Respecte les standards .NET
 - ✅ **Déploiement simple** - Conteneurisation facile
 - ✅ **Performance** - Code optimisé pour K8s
-- ✅ **Maintenance** - Moins de fichiers à gérer
+- ✅ **Maintenance** - Architecture claire et maintenable
 - ✅ **Portabilité** - Compatible tous environnements
 
 ---
@@ -136,7 +145,8 @@ dotnet/kafka-producer-vss/
 | Critère | VS Code (vsc) | Visual Studio (vss) |
 |---------|---------------|---------------------|
 | **Niveau** | Intermédiaire | Débutant à Avancé |
-| **Taille** | Léger (12 fichiers) | Complet (216 fichiers) |
+| **Taille** | Léger (15 fichiers) | Complet (216 fichiers) |
+| **Architecture** | Controllers + Services | Controllers + Services |
 | **Déploiement** | K8s/Production | Apprentissage/Développement |
 | **Documentation** | Minimaliste | Très complète |
 | **IDE** | VS Code optimal | VS 2022 optimal |
