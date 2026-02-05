@@ -88,10 +88,10 @@ Remplissez les informations suivantes :
 Configurez les options suivantes :
 
 - **Framework** : Sélectionnez **".NET 8.0"**
-- **Authentication type** : Laissez à **"None"**
-- **Configure for HTTPS** : Cochez cette option
-- **Use controllers (uncheck to use minimal APIs)** : Décochez pour utiliser les APIs minimales
-- **Enable OpenAPI support** : Cochez pour Swagger/OpenAPI
+- **Authentication type** : **None**
+- **Configure for HTTPS** : ❌ Décoché (HTTP-only pour Docker)
+- **Use controllers** : ✅ Coché (Controllers traditionnels)
+- **Enable OpenAPI support** : ❌ Décoché (Non utilisé dans cette version)
 - Cliquez sur **"Create"**
 
 #### Étape 6 : Projet Créé
@@ -395,8 +395,8 @@ dotnet restore
 
 #### 3. **Port Already in Use**
 ```bash
-# Tuer le processus sur le port
-netstat -ano | findstr :5001
+# Tuer le processus sur le port 5000 (HTTP)
+netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 ```
 
@@ -405,7 +405,7 @@ taskkill /PID <PID> /F
 ## ⚡ Commandes Utiles
 
 ```bash
-# Lancer l'application
+# Lancer l'application (HTTP sur port 5000)
 dotnet run
 
 # Build en mode Release
@@ -414,10 +414,12 @@ dotnet build -c Release
 # Publier pour production
 dotnet publish -c Release -o ./publish
 
-# Tester avec curl
-curl -X POST "https://localhost:5001/api/kafka/send" 
-     -H "Content-Type: application/json" 
-     -d '{"topic":"test","key":"key1","message":"Hello Kafka"}'
+# Tester avec curl (HTTP)
+curl -X POST "http://localhost:5000/api/v1/send?mode=idempotent&eventId=test-123&topic=bhf-transactions" 
+    -H "Content-Type: application/json"
+
+# Vérifier le health endpoint
+curl http://localhost:5000/health
 ```
 
 ---
@@ -450,8 +452,9 @@ dotnet user-secrets set "Kafka:BootstrapServers" "localhost:9092"
 - [ ] KafkaProducerService implémenté
 - [ ] Program.cs configuré
 - [ ] appsettings.json mis à jour
-- [ ] Application démarre sans erreur
+- [ ] Application démarre sans erreur (HTTP port 5000)
 - [ ] Endpoint Kafka répond correctement
+- [ ] Health endpoint `/health` accessible
 
 ---
 

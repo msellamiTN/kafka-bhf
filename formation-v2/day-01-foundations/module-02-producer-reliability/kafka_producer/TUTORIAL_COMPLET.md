@@ -211,9 +211,9 @@ docker-compose -f docker-compose.single-node.yml ps
 - **Location** : `D:\Data2AI Academy\Kafka\kafka-bhf\formation-v2\day-01-foundations\module-02-producer-reliability\`
 - **Framework** : **.NET 8.0**
 - **Authentication type** : **None**
-- **Configure for HTTPS** : ✅ Coché
-- **Use controllers** : ❌ Décoché (APIs minimales)
-- **Enable OpenAPI support** : ✅ Coché
+- **Configure for HTTPS** : ❌ Décoché (HTTP-only pour Docker)
+- **Use controllers** : ✅ Coché (Controllers traditionnels)
+- **Enable OpenAPI support** : ❌ Décoché (Non utilisé dans cette version)
 - Cliquez sur **"Create"**
 
 #### Étape 1.4 : Projet Créé
@@ -390,87 +390,315 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
 
-// Configuration du logging
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.SetMinimumLevel(LogLevel.Information);
-
-// Ajouter le service Kafka
+// Register Kafka Producer Service
 builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
 
-// Configuration Kafka
-builder.Services.Configure<KafkaOptions>(builder.Configuration.GetSection("Kafka"));
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Kafka Producer API V1");
-        c.RoutePrefix = string.Empty; // Swagger à la racine
-    });
+    // HTTP-only mode for Docker compatibility
 }
 
-app.UseHttpsRedirection();
+// Disabled for Docker HTTP-only development mode
+// app.UseHttpsRedirection();
+
 app.UseAuthorization();
+
 app.MapControllers();
 
-// Health Check
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+// Health endpoint
+app.MapGet("/health", () => Results.Ok("OK"));
 
-// Endpoint principal pour envoyer des messages
-app.MapPost("/api/v1/send", async (IKafkaProducerService producerService, 
-    SendRequest request) =>
+app.Run();
+```
+
+### 2.4 Créer le Controller Kafka
+
+Créez le fichier `Controllers/KafkaController.cs` :
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using kafka_producer.Services;
+
+namespace kafka_producer.Controllers
 {
-    try
+    [ApiController]
+    [Route("api/v1")]
+    public class KafkaController : ControllerBase
     {
-        var result = await producerService.SendMessageAsync(
-            request.Topic, 
-            request.Key, 
-            request.Message,
-            request.IsIdempotent,
-            request.IsAsync);
+        private readonly IKafkaProducerService _producerService;
+        private readonly ILogger<KafkaController> _logger;
 
-        return Results.Ok(new SendResponse
+        public KafkaController(IKafkaProducerService producerService, ILogger<KafkaController> logger)
         {
-            Success = true,
-            Topic = result.Topic,
-            Partition = result.Partition,
-            Offset = result.Offset,
-            Mode = request.IsIdempotent ? "idempotent" : "plain",
-            SendMode = request.IsAsync ? "async" : "sync"
-        });
+            _producerService = producerService;
+            _logger = logger;
+        }
+
+        [HttpGet("health")]
+        public IActionResult Health()
+        {
+            return Ok("OK");
+        }
+
+        [HttpPost("send")]
+        public async Task<IActionResult> SendMessage([FromQuery] string mode, [FromQuery] string eventId, 
+            [FromQuery] string? topic = null, [FromQuery] string? sendMode = null, [FromQuery] string? key = null)
+        {
+            try
+            {
+                // Validation des paramètres requis
+                if (string.IsNullOrWhiteSpace(mode))
+                    return BadRequest("Missing query parameter: mode");
+                
+                if (string.IsNullOrWhiteSpace(eventId))
+                    return BadRequest("Missing query parameter: eventId");
+
+                // Valeurs par défaut
+                topic ??= "bhf-transactions";
+                sendMode ??= "sync";
+                key ??= eventId;
+
+                // Conversion des modes
+                bool isIdempotent = mode.Equals("idempotent", StringComparison.OrdinalIgnoreCase);
+                bool isAsync = sendMode.Equals("async", StringComparison.OrdinalIgnoreCase);
+
+                // Création du message
+                var message = $"{{\"eventId\":\"{eventId}\",\"mode\":\"{mode}\",\"sendMode\":\"{sendMode}\",\"api\":\"kafka_producer\",\"ts\":\"{DateTimeOffset.UtcNow:O}\"}}";
+
+                _logger.LogInformation("Sending message: {EventId} in {Mode} mode", eventId, mode);
+
+                // Envoyer le message
+                var result = await _producerService.SendMessageAsync(
+                    topic, 
+                    key, 
+                    message,
+                    isIdempotent,
+                    isAsync);
+
+                return Ok(new 
+                {
+                    success = true,
+                    topic = result.Topic,
+                    partition = result.Partition,
+                    offset = result.Offset,
+                    mode = isIdempotent ? "idempotent" : "plain",
+                    sendMode = isAsync ? "async" : "sync"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending message");
+                return StatusCode(500, $"Error sending message: {ex.Message}");
+            }
+        }
     }
-    catch (Exception ex)
-    {
-        return Results.Problem($"Error sending message: {ex.Message}");
+}
+```
+
+---
+
+## 📦 Étape 3 : Configuration de l'Application
+
+### 3.1 Mettre à jour appsettings.json
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
     }
-});
+  },
+  "AllowedHosts": "*",
+  "Kafka": {
+    "BootstrapServers": "localhost:9092"
+  }
+}
+```
 
-// Endpoint pour tester les différents modes
-app.MapPost("/api/v1/test/plain", async (IKafkaProducerService producerService, string topic, string key, string message) =>
-{
-    var result = await producerService.SendMessageAsync(topic, key, message, isIdempotent: false, isAsync: false);
-    return Results.Ok(new { mode = "plain-sync", offset = result.Offset });
-});
+### 3.2 Tester l'Application
 
-app.MapPost("/api/v1/test/idempotent", async (IKafkaProducerService producerService, string topic, string key, string message) =>
-{
-    var result = await producerService.SendMessageAsync(topic, key, message, isIdempotent: true, isAsync: false);
-    return Results.Ok(new { mode = "idempotent-sync", offset = result.Offset });
-});
+```bash
+# Lancer l'application
+dotnet run
 
-app.MapPost("/api/v1/test/plain-async", async (IKafkaProducerService producerService, string topic, string key, string message) =>
-{
-    var result = await producerService.SendMessageAsync(topic, key, message, isIdempotent: false, isAsync: true);
-    return Results.Ok(new { mode = "plain-async", offset = result.Offset });
-});
+# Tester le health endpoint
+curl http://localhost:5000/health
+
+# Tester l'endpoint Kafka
+curl -X POST "http://localhost:5000/api/v1/send?mode=idempotent&eventId=test-001"
+```
+
+---
+
+## 🐳 Module 4 : Déploiement Docker
+
+### 4.1 Dockerfile (HTTP-only)
+
+Le Dockerfile est configuré pour le mode HTTP-only pour compatibilité Docker :
+
+```dockerfile
+# Multi-stage Dockerfile - Kafka Producer API (HTTP Development Mode)
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+WORKDIR /source
+
+COPY ["kafka_producer.csproj", ""]
+COPY ["Program.cs", ""]
+COPY ["appsettings.json", ""]
+COPY ["appsettings.Development.json", ""]
+COPY ["Services/", "Services/"]
+COPY ["Controllers/", "Controllers/"]
+COPY ["Properties/", "Properties/"]
+
+RUN dotnet restore "kafka_producer.csproj"
+RUN dotnet build "kafka_producer.csproj" -c Release -o /app/build
+RUN dotnet publish "kafka_producer.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/publish .
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
+
+EXPOSE 80
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV ASPNETCORE_URLS=http://+:80
+
+ENTRYPOINT ["dotnet", "kafka_producer.dll"]
+```
+
+### 4.2 Build et Exécution Docker
+
+```bash
+# Build l'image
+docker build -t kafka_producer .
+
+# Exécuter le conteneur
+docker run -p 5000:80 kafka_producer
+
+# Tester dans le conteneur
+curl -X POST "http://localhost:5000/api/v1/send?mode=idempotent&eventId=docker-test-001"
+```
+
+---
+
+## ☸️ Module 5 : Déploiement Kubernetes BHF
+
+> **Note** : Le projet de production pour K8s se trouve dans `../dotnet/` avec une configuration différente.
+
+### 5.1 Scripts de Déploiement
+
+Les scripts K8s sont dans `../scripts/k8s/` :
+
+```bash
+cd ../scripts/k8s
+chmod +x *.sh
+
+# Pipeline complet
+sudo ./00-full-deploy.sh
+```
+
+### 5.2 Architecture K8s
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     Kubernetes Cluster                       │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │   Java API      │  │   .NET API      │  │  Toxiproxy  │  │
+│  │   NodePort:     │  │   NodePort:     │  │  NodePort:  │  │
+│  │   31080         │  │   31081         │  │  31474      │  │
+│  └────────┬────────┘  └────────┬────────┘  └──────┬──────┘  │
+│           │                    │                   │         │
+│           └────────────────────┼───────────────────┘         │
+│                                │                             │
+│                    ┌───────────▼───────────┐                 │
+│                    │   Kafka Bootstrap     │                 │
+│                    │   bhf-kafka:9092      │                 │
+│                    └───────────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🧪 Module 6 : Tests et Validation
+
+### 6.1 Tests de l'API
+
+```bash
+# Test health endpoint
+curl http://localhost:5000/health
+
+# Test mode plain
+curl -X POST "http://localhost:5000/api/v1/send?mode=plain&eventId=test-plain-001"
+
+# Test mode idempotent
+curl -X POST "http://localhost:5000/api/v1/send?mode=idempotent&eventId=test-idemp-001"
+
+# Test mode async
+curl -X POST "http://localhost:5000/api/v1/send?mode=idempotent&eventId=test-async-001&sendMode=async"
+```
+
+### 6.2 Validation Kafka
+
+```bash
+# Consulter les messages dans Kafka
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic bhf-transactions --from-beginning
+```
+
+---
+
+## ✅ Résumé des Corrections
+
+Les corrections suivantes ont été appliquées pour assurer la cohérence :
+
+### ✅ **HTTPS → HTTP**
+- Documentation mise à jour pour HTTP-only
+- Commandes curl corrigées pour HTTP port 5000
+- Configuration Docker expliquée
+
+### ✅ **Swagger → Controllers**
+- Documentation corrigée pour controllers traditionnels
+- Code de controller complet ajouté
+- Configuration Program.cs alignée
+
+### ✅ **Structure Projet**
+- Clarification sur le projet `dotnet/` séparé
+- Références correctes vers les scripts K8s
+- Architecture documentée correctement
+
+### ✅ **Configuration**
+- appsettings.json simplifié et cohérent
+- Logging par défaut (pas de configuration explicite)
+- Health endpoint `/health` documenté
+
+---
+
+## 🎯 Conclusion
+
+Le projet kafka_producer est maintenant **cohérent et fonctionnel** avec :
+
+- ✅ **HTTP-only** pour compatibilité Docker
+- ✅ **Controllers traditionnels** pour clarté
+- ✅ **Configuration alignée** avec le code source
+- ✅ **Documentation complète** et à jour
+
+**Prochaines étapes** :
+1. Tester localement avec `dotnet run`
+2. Builder l'image Docker avec `docker build`
+3. Déployer sur K8s avec les scripts appropriés
+
+---
+
+*🎉 Félicitations ! Vous avez maintenant un producteur Kafka ASP.NET Core 8 fonctionnel et cohérent !*
 
 app.MapPost("/api/v1/test/idempotent-async", async (IKafkaProducerService producerService, string topic, string key, string message) =>
 {
