@@ -61,6 +61,112 @@ flowchart TB
 
 ---
 
+## 🏗️ Structure des Projets .NET
+
+Ce module propose **deux approches de développement** pour s'adapter à votre environnement de travail préféré :
+
+### 📁 **Option 1 : Visual Studio Code** (`dotnet/kafka-producer-vsc/`)
+
+**Approche minimaliste et légère** - Idéale pour le développement rapide et les environnements conteneurisés.
+
+#### 🎯 Caractéristiques
+- **Architecture** : Minimal API (Program.cs unique)
+- **Style** : Code concis et fonctionnel
+- **Dépendances** : Minimum requis
+- **Taille** : ~12 fichiers (léger)
+- **IDE** : Visual Studio Code optimal
+
+#### 📂 Structure
+```
+dotnet/kafka-producer-vsc/
+├── Program.cs                    # API complète en un fichier
+├── Dockerfile                    # Build Docker optimisé
+├── M02ProducerReliability.Api.csproj
+├── bin/ & obj/                   # Build outputs
+```
+
+#### 🚀 Avantages
+- ✅ **Déploiement simple** - Conteneurisation facile
+- ✅ **Performance** - Code optimisé pour K8s
+- ✅ **Maintenance** - Moins de fichiers à gérer
+- ✅ **Portabilité** - Compatible tous environnements
+
+---
+
+### 📁 **Option 2 : Visual Studio** (`dotnet/kafka-producer-vss/`)
+
+**Approche structurée et pédagogique** - Idéale pour l'apprentissage et les projets complexes.
+
+#### 🎯 Caractéristiques
+- **Architecture** : Controllers + Services traditionnels
+- **Style** : Code structuré et documenté
+- **Dépendances** : Complètes avec documentation
+- **Taille** : ~216 fichiers (complet)
+- **IDE** : Visual Studio 2022 optimal
+
+#### 📂 Structure
+```
+dotnet/kafka-producer-vss/
+├── Controllers/
+│   └── KafkaController.cs         # API endpoints
+├── Services/
+│   └── KafkaProducerService.cs    # Business logic
+├── Properties/                   # Configuration
+├── docs/                         # Documentation complète
+├── scripts/                      # Scripts utilitaires
+├── assets/                       # Images et ressources
+├── README.md                     # Guide détaillé
+├── STRUCTURE.md                  # Architecture détaillée
+├── TUTORIAL_COMPLET.md           # Tutoriel pas à pas
+├── Dockerfile                    # Build multi-stage
+├── kafka_producer.csproj         # Projet complet
+└── kafka_producer.slnx           # Solution VS
+```
+
+#### 🎓 Avantages
+- ✅ **Pédagogique** - Documentation complète
+- ✅ **Maintenable** - Code bien structuré
+- ✅ **Extensible** - Architecture modulaire
+- ✅ **Debugging** - Support VS complet
+
+---
+
+## 🔄 **Comment Choisir ?**
+
+| Critère | VS Code (vsc) | Visual Studio (vss) |
+|---------|---------------|---------------------|
+| **Niveau** | Intermédiaire | Débutant à Avancé |
+| **Taille** | Léger (12 fichiers) | Complet (216 fichiers) |
+| **Déploiement** | K8s/Production | Apprentissage/Développement |
+| **Documentation** | Minimaliste | Très complète |
+| **IDE** | VS Code optimal | VS 2022 optimal |
+| **Objectif** | Performance production | Formation pédagogique |
+
+### 🎯 **Recommandations**
+
+- **🚀 Pour la production** : Utilisez `kafka-producer-vsc/`
+- **🎓 Pour l'apprentissage** : Utilisez `kafka-producer-vss/`
+- **🔧 Pour le prototypage** : Commencez avec `vsc`, migrez vers `vss` si besoin
+- **📚 Pour la formation** : `vss` est parfait avec sa documentation complète
+
+---
+
+## 📋 **Parcours Recommandé**
+
+### 🎓 **Parcours Pédagogique** (Recommandé pour débutants)
+1. **Théorie** : Lire la documentation dans `kafka-producer-vss/docs/`
+2. **Code** : Étudier `kafka-producer-vss/` avec controllers/services
+3. **Pratique** : Tester localement avec Visual Studio
+4. **Production** : Adapter pour `kafka-producer-vsc/`
+
+### 🚀 **Parcours Rapide** (Pour développeurs expérimentés)
+1. **Code** : Analyser `kafka-producer-vsc/Program.cs`
+2. **Docker** : Builder et déployer directement
+3. **K8s** : Utiliser les scripts de déploiement
+4. **Production** : Optimiser pour l'environnement cible
+
+---
+
 ## 📖 Partie Théorique Approfondie
 
 ### 1. Le Producteur Kafka en détail
