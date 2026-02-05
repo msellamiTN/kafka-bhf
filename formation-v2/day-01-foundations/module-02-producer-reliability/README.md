@@ -71,8 +71,8 @@ Ce module propose **deux approches de développement** pour s'adapter à votre e
 
 #### 🎯 Caractéristiques
 - **Architecture** : Controllers + Services (structure officielle .NET)
-- **Style** : Code structuré et optimisé
-- **Dépendances** : Minimum requis et cohérentes
+- **Style** : Code propre avec séparation des responsabilités
+- **Dépendances** : Minimum requis et cohérentes (Confluent.Kafka 2.3.0)
 - **Taille** : ~15 fichiers (léger)
 - **IDE** : Visual Studio Code optimal
 
@@ -80,21 +80,28 @@ Ce module propose **deux approches de développement** pour s'adapter à votre e
 ```
 dotnet/kafka-producer-vsc/
 ├── Controllers/
-│   └── KafkaController.cs         # API endpoints
+│   └── KafkaController.cs         # API endpoints (/api/v1/send, /health)
 ├── Services/
-│   └── KafkaProducerService.cs    # Business logic
+│   └── KafkaProducerService.cs    # Business logic Kafka (DI pattern)
 ├── Properties/
-│   └── launchSettings.json        # Configuration IDE
-├── Program.cs                      # Configuration ASP.NET Core
+│   └── launchSettings.json        # Configuration IDE (HTTP:5000)
+├── Program.cs                      # Configuration ASP.NET Core pure
 ├── Dockerfile                      # Build Docker optimisé
 ├── M02ProducerReliability.Api.csproj
-├── appsettings.json                # Configuration app
-├── appsettings.Development.json    # Configuration dev
+├── appsettings.json                # Configuration Kafka (localhost:9092)
+├── appsettings.Development.json    # Configuration développement
 ├── bin/ & obj/                     # Build outputs
 ```
 
+#### 🏗️ **Architecture Technique**
+- **Program.cs** : Configuration ASP.NET Core uniquement
+- **KafkaController** : Endpoints API avec validation des paramètres
+- **KafkaProducerService** : Logique métier Kafka avec injection de dépendances
+- **Séparation claire** : Pas de code dupliqué, chaque classe sa responsabilité
+
 #### 🚀 Avantages
-- ✅ **Structure officielle** - Respecte les standards .NET
+- ✅ **Code propre** - Architecture DDD respectée
+- ✅ **Structure officielle** - Standards .NET 8
 - ✅ **Déploiement simple** - Conteneurisation facile
 - ✅ **Performance** - Code optimisé pour K8s
 - ✅ **Maintenance** - Architecture claire et maintenable
@@ -147,6 +154,7 @@ dotnet/kafka-producer-vss/
 | **Niveau** | Intermédiaire | Débutant à Avancé |
 | **Taille** | Léger (15 fichiers) | Complet (216 fichiers) |
 | **Architecture** | Controllers + Services | Controllers + Services |
+| **Code Quality** | Propre, pas de duplication | Propre, bien documenté |
 | **Déploiement** | K8s/Production | Apprentissage/Développement |
 | **Documentation** | Minimaliste | Très complète |
 | **IDE** | VS Code optimal | VS 2022 optimal |
@@ -170,10 +178,39 @@ dotnet/kafka-producer-vss/
 4. **Production** : Adapter pour `kafka-producer-vsc/`
 
 ### 🚀 **Parcours Rapide** (Pour développeurs expérimentés)
-1. **Code** : Analyser `kafka-producer-vsc/Program.cs`
+1. **Code** : Analyser `vsc/` - architecture propre (Controllers + Services)
 2. **Docker** : Builder et déployer directement
 3. **K8s** : Utiliser les scripts de déploiement
 4. **Production** : Optimiser pour l'environnement cible
+
+---
+
+## 🔧 **Architecture Technique Partagée**
+
+### 📋 **Structure Commune**
+Les deux projets partagent la même architecture technique :
+
+```csharp
+// Program.cs - Configuration ASP.NET Core
+builder.Services.AddControllers();
+builder.Services.AddSingleton<IKafkaProducerService, KafkaProducerService>();
+app.MapControllers();
+app.MapGet("/health", () => Results.Ok("OK"));
+
+// KafkaController.cs - Endpoints API
+[HttpGet("health")]
+[HttpPost("send")]
+// Validation des paramètres et appel au service
+
+// KafkaProducerService.cs - Business Logic
+// Configuration Kafka, envoi de messages, gestion des erreurs
+```
+
+### 🎯 **Principes DDD Appliqués**
+- **Single Responsibility** : Chaque classe a une responsabilité unique
+- **Dependency Injection** : Services injectés via conteneur DI
+- **Separation of Concerns** : Logique métier séparée de la présentation
+- **No Code Duplication** : Pas de duplication entre Program.cs et Services
 
 ---
 
