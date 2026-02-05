@@ -1,29 +1,56 @@
-# Consultez https://aka.ms/customizecontainer pour savoir comment personnaliser votre conteneur de débogage et comment Visual Studio utilise ce Dockerfile pour générer vos images afin d’accélérer le débogage.
+# Multi-stage Dockerfile - Kafka Producer API (HTTP Development Mode)
 
-# Cet index est utilisé lors de l’exécution à partir de VS en mode rapide (par défaut pour la configuration de débogage)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+# ============================================
+# Stage 1: Build
+# ============================================
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS builder
+
+WORKDIR /source
+
+# Copy project files
+COPY ["kafka_producer.csproj", ""]
+COPY ["Program.cs", ""]
+COPY ["appsettings.json", ""]
+COPY ["appsettings.Development.json", ""]
+COPY ["Services/", "Services/"]
+COPY ["Controllers/", "Controllers/"]
+COPY ["Properties/", "Properties/"]
+
+# Restore dependencies
+RUN dotnet restore "kafka_producer.csproj"
+
+# Build application
+RUN dotnet build "kafka_producer.csproj" -c Release -o /app/build
+
+# Publish application
+RUN dotnet publish "kafka_producer.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# ============================================
+# Stage 2: Runtime (HTTP Only)
+# ============================================
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
 
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Cette phase est utilisée pour générer le projet de service
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["kafka_producer.csproj", "."]
-RUN dotnet restore "./kafka_producer.csproj"
-COPY . .
-WORKDIR "/src/."
-RUN dotnet build "./kafka_producer.csproj" -c $BUILD_CONFIGURATION -o /app/build
+# Copy published application
+COPY --from=builder /app/publish .
 
-# Cette étape permet de publier le projet de service à copier dans la phase finale
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./kafka_producer.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
 
-# Cette phase est utilisée en production ou lors de l’exécution à partir de VS en mode normal (par défaut quand la configuration de débogage n’est pas utilisée)
-FROM base AS final
-WORKDIR /app
-COPY --from=publish /app/publish .
+# Expose port (HTTP only - 80)
+EXPOSE 80
+
+# Set environment variables for HTTP only
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV ASPNETCORE_URLS=http://+:80
+
+# Run application
 ENTRYPOINT ["dotnet", "kafka_producer.dll"]

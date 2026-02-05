@@ -15,7 +15,8 @@ if (app.Environment.IsDevelopment())
 {
 }
 
-app.UseHttpsRedirection();
+// Disabled for Docker HTTP-only development mode
+// app.UseHttpsRedirection();
 
 app.UseAuthorization();
 

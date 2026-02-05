@@ -34,7 +34,8 @@ show_usage() {
     echo "  --kafka       Remove Kafka and Strimzi only"
     echo "  --monitoring  Remove monitoring stack only"
     echo "  --k3s         Remove K3s completely"
-    echo "  --all         Remove everything (K3s, Docker containers, data)"
+    echo "  --openshift   Remove OpenShift/OKD/CRC installations"
+    echo "  --all         Remove everything (K3s, OpenShift, Docker containers, data)"
     echo "  --help        Show this help message"
     echo ""
     echo "Examples:"
@@ -127,6 +128,21 @@ remove_ingress() {
 }
 
 #===============================================================================
+# Remove OpenShift/OKD/CRC
+#===============================================================================
+remove_openshift() {
+    log_info "Removing OpenShift/OKD/CRC installations..."
+    
+    # Run OpenShift cleanup script if exists
+    if [ -f "$(dirname "$0")/06-cleanup-openshift.sh" ]; then
+        log_info "Running OpenShift cleanup script..."
+        "$(dirname "$0")/06-cleanup-openshift.sh" all
+    else
+        log_warning "OpenShift cleanup script not found"
+    fi
+}
+
+#===============================================================================
 # Remove K3s
 #===============================================================================
 remove_k3s() {
@@ -176,11 +192,12 @@ remove_all_data() {
 # Full cleanup
 #===============================================================================
 full_cleanup() {
-    confirm_action "remove ALL components (Kafka, Monitoring, K3s, Docker containers)"
+    confirm_action "remove ALL components (Kafka, Monitoring, OpenShift, K3s, Docker containers)"
     
     remove_kafka
     remove_monitoring
     remove_ingress
+    remove_openshift
     remove_k3s
     remove_docker_containers
     remove_all_data
@@ -213,11 +230,16 @@ main() {
                 log_error "Please run as root for K3s removal"
                 exit 1
             fi
-            confirm_action "remove K3s completely"
-            remove_kafka
-            remove_monitoring
-            remove_ingress
+            confirm_action "remove K3s"
             remove_k3s
+            ;;
+        --openshift)
+            if [ "$EUID" -ne 0 ]; then
+                log_error "Please run as root for OpenShift removal"
+                exit 1
+            fi
+            confirm_action "remove OpenShift/OKD/CRC installations"
+            remove_openshift
             ;;
         --all)
             if [ "$EUID" -ne 0 ]; then
