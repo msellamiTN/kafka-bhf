@@ -10,32 +10,74 @@
 
 ---
 
-## 🏗️ Architecture sur OpenShift
+## 🏗️ Architecture sur OpenShift (C4 Context View)
 
 ```mermaid
 flowchart TB
+    subgraph External["External Systems"]
+        WEB["🌐 Web Applications"]
+        MOBILE["📱 Mobile Apps"]
+        PARTNER["🤝 Partner APIs"]
+        LEGACY["🏛️ Legacy Systems"]
+    end
+    
     subgraph OpenShift["☸️ OpenShift Cluster"]
         subgraph NS1["📦 kafka-infra"]
             K1["🔷 Kafka Broker 1"]
             K2["🔷 Kafka Broker 2"]
             K3["🔷 Kafka Broker 3"]
             ZK["Strimzi Operator"]
+            MONITOR["📊 Monitoring"]
         end
         
-        subgraph NS2["📦 app-namespace"]
-            API["🟢 .NET API"]
-            CONS["🔵 .NET Consumer"]
+        subgraph NS2["📦 banking-apps"]
+            API["🟢 .NET Order API"]
+            PAYMENT["💳 .NET Payment API"]
+            NOTIF["📧 .NET Notification API"]
+            ANALYTICS["� .NET Analytics API"]
             CFG["ConfigMap"]
             SEC["Secret"]
+            INGRESS["🌐 Route/Ingress"]
         end
         
-        K1 & K2 & K3 <-->|"29092"| API
-        K1 & K2 & K3 <-->|"29092"| CONS
+        subgraph NS3["📦 data-layer"]
+            SQL["🗄️ SQL Server"]
+            REDIS["🔴 Redis Cache"]
+            CONNECT["🔌 Kafka Connect"]
+        end
     end
+    
+    WEB -->|HTTPS| INGRESS
+    MOBILE -->|HTTPS| INGRESS
+    PARTNER -->|HTTPS| INGRESS
+    LEGACY -->|CDC| CONNECT
+    
+    INGRESS --> API
+    INGRESS --> PAYMENT
+    INGRESS --> NOTIF
+    INGRESS --> ANALYTICS
+    
+    API <-->|Events| K1
+    PAYMENT <-->|Events| K2
+    NOTIF <-->|Events| K3
+    ANALYTICS <-->|Events| K1
+    
+    API -->|Query/Write| SQL
+    PAYMENT -->|Query/Write| SQL
+    ANALYTICS -->|Read| SQL
+    
+    API -->|Cache| REDIS
+    PAYMENT -->|Cache| REDIS
+    
+    CONNECT -->|CDC| SQL
+    CONNECT -->|Events| K1
     
     style K1 fill:#e8f5e9
     style K2 fill:#e8f5e9
     style K3 fill:#e8f5e9
+    style SQL fill:#e1f5fe
+    style REDIS fill:#ffeb3b
+    style CONNECT fill:#f3e5f5
 ```
 
 ---
